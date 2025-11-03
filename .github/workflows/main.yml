@@ -1,0 +1,20 @@
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [ main ]    # nếu nhánh chính là master, đổi thành master
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: nuget/setup-nuget@v2
+      - run: nuget restore "**/*.sln"
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build (Release)
+        run: |
+          $solutions = Get-ChildItem -Recurse -Filter *.sln | Select-Object -Expand FullName
+          if (-not $solutions) { throw "No .sln found" }
+          foreach ($sln in $solutions) {
+            msbuild "$sln" /p:Configuration=Release /m
+          }
