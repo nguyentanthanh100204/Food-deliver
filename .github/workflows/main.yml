@@ -2,19 +2,49 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [ main ]    # nếu nhánh chính là master, đổi thành master
+    branches: [ main ]  # nếu nhánh chính là master, đổi thành master
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: nuget/setup-nuget@v2
-      - run: nuget restore "**/*.sln"
-      - uses: microsoft/setup-msbuild@v2
-      - name: Build (Release)
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore & Build (.sln or .csproj)
+        shell: pwsh
         run: |
+          Write-Host "=== Scan repo for .sln / .csproj ==="
           $solutions = Get-ChildItem -Recurse -Filter *.sln | Select-Object -Expand FullName
-          if (-not $solutions) { throw "No .sln found" }
-          foreach ($sln in $solutions) {
-            msbuild "$sln" /p:Configuration=Release /m
+          $projects  = Get-ChildItem -Recurse -Filter *.csproj | Select-Object -Expand FullName
+          Write-Host "Found solutions:" ($solutions -join "`n")
+          Write-Host "Found projects :" ($projects -join "`n")
+
+          if ($solutions) {
+            foreach ($sln in $solutions) {
+              Write-Host "NuGet restore $sln"
+              nuget restore "$sln"
+              Write-Host "MSBuild $sln (Release)"
+              msbuild "$sln" /p:Configuration=Release /m
+            }
+            exit 0
           }
+
+          if ($projects) {
+            foreach ($csproj in $projects) {
+              Write-Host "NuGet restore $csproj"
+              nuget restore "$csproj"
+              Write-Host "MSBuild $csproj (Release)"
+              msbuild "$csproj" /p:Configuration=Release /m
+            }
+            exit 0
+          }
+
+          Write-Error "No .sln or .csproj found in repository. Please commit your solution/project files."
+          exit 1
