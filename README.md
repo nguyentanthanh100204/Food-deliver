@@ -12,4 +12,3 @@
 -Entity Framework
 -JQuery
 -Bootstrap
-*CI/CD
