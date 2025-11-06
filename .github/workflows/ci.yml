@@ -93,3 +93,26 @@ jobs:
         with:
           name: test-results
           path: "**/*.trx"
+      # ---- chỉ chạy nếu toàn bộ bước trước thành công ----
+      - name: Package Web App (WebDeploy zip)
+        if: ${{ success() }}
+        shell: pwsh
+        run: |
+          # tìm file .csproj của web (đổi tên nếu dự án không phải FoodOrderingSystem.csproj)
+          $proj = Get-ChildItem -Recurse -Filter FoodOrderingSystem.csproj | Select-Object -First 1 -Expand FullName
+          if (-not $proj) { throw "Không tìm thấy FoodOrderingSystem.csproj" }
+
+          # build + tạo gói WebDeploy (.zip)
+          & msbuild $proj `
+            /p:Configuration=Release `
+            /p:DeployOnBuild=true `
+            /p:WebPublishMethod=Package `
+            /p:PackageAsSingleFile=true `
+            /p:PackageLocation="$PWD\out\FoodOrderingSystem.zip"
+
+      - name: Upload deploy artifact
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: webdeploy-package
+          path: out/FoodOrderingSystem.zip
