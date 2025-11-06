@@ -78,21 +78,33 @@ jobs:
         shell: pwsh
         run: |
           $assemblies = "${{ steps.find_tests.outputs.found }}".Split("::")
-          # Tìm đường dẫn vstest.console.exe an toàn bằng vswhere (phòng trường hợp Enterprise/Community)
+      
+          # Thư mục chứa kết quả .trx
+          $out = "$PWD\out\test-results"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+      
+          # Tìm vstest.console.exe qua vswhere
           $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vstest = & $vswhere -latest -products * -requires Microsoft.Component.TestTools.BuildTools -find **\vstest.console.exe | Select-Object -First 1
-          if (-not $vstest) { $vstest = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe" }
-          Write-Host "Using vstest: $vstest"
-          foreach ($asm in $assemblies) {
-            & "$vstest" "$asm" --logger:"trx;LogFileName=$(Split-Path $asm -Leaf).trx"
+          $vstest = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find **\vstest.console.exe
+          if (-not $vstest) {
+            $vstest = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
           }
+          Write-Host "Using vstest: $vstest"
+      
+          foreach ($asm in $assemblies) {
+            & "$vstest" "$asm" `
+              --logger:"trx;LogFileName=$(Split-Path $asm -Leaf).trx" `
+              /ResultsDirectory:"$out"
+          }
+
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results
-          path: "**/*.trx"
+          path: out/test-results/*.trx
+
       # ---- chỉ chạy nếu toàn bộ bước trước thành công ----
       - name: Package Web App (WebDeploy zip)
         if: ${{ success() }}
