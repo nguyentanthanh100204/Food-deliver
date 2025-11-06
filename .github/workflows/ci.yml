@@ -53,15 +53,18 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "=== Discover *Tests.dll ==="
-          $dlls = Get-ChildItem -Recurse -Include *Tests.dll -Path . |
-                  Where-Object { $_.FullName -notmatch "TestAdapter|obj\\|bin\\Debug" } |
+          $dlls = Get-ChildItem -Recurse -Filter *Tests.dll -Path . |
+                  Where-Object { $_.FullName -notmatch 'TestAdapter|\\obj\\|\\bin\\Debug' } |
                   Select-Object -Expand FullName
+      
           if ($dlls) {
             "found=$($dlls -join '::')" | Out-File -Append $env:GITHUB_OUTPUT
             Write-Host "Found:`n$($dlls -join "`n")"
           } else {
+            "found=" | Out-File -Append $env:GITHUB_OUTPUT
             Write-Host "No *Tests.dll found"
           }
+
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
@@ -74,18 +77,24 @@ jobs:
           sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
 
       - name: Run tests (VSTest)
-        if: steps.find_tests.outputs.found != ''
         shell: pwsh
         run: |
-          $assemblies = "${{ steps.find_tests.outputs.found }}".Split("::")
+          $assemblies = @()
+          if ("${{ steps.find_tests.outputs.found }}" -ne "") {
+            $assemblies = "${{ steps.find_tests.outputs.found }}".Split("::")
+          }
       
-          # Thư mục chứa kết quả .trx
+          if ($assemblies.Count -eq 0) {
+            Write-Host "No test assemblies to run. Skipping vstest."
+            exit 0
+          }
+      
           $out = "$PWD\out\test-results"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
       
-          # Tìm vstest.console.exe qua vswhere
+          # tìm vstest.console.exe
           $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vstest = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find **\vstest.console.exe
+          $vstest  = & $vswhere -latest -products * -requires Microsoft.Component.TestTools.BuildTools -find **\vstest.console.exe
           if (-not $vstest) {
             $vstest = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
           }
@@ -96,6 +105,9 @@ jobs:
               --logger:"trx;LogFileName=$(Split-Path $asm -Leaf).trx" `
               /ResultsDirectory:"$out"
           }
+      
+          Write-Host "Result files:"
+          Get-ChildItem $out -Filter *.trx -Recurse | ForEach-Object { Write-Host $_.FullName }
 
 
       - name: Upload test results
@@ -104,6 +116,7 @@ jobs:
         with:
           name: test-results
           path: out/test-results/*.trx
+
 
       # ---- chỉ chạy nếu toàn bộ bước trước thành công ----
       - name: Package Web App (WebDeploy zip)
