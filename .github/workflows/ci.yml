@@ -62,6 +62,16 @@ jobs:
           } else {
             Write-Host "No *Tests.dll found"
           }
+      - name: Prepare SQL LocalDB and seed schema
+        shell: pwsh
+        run: |
+          sqllocaldb start "MSSQLLocalDB" | Out-Null
+
+          # Tạo DB nếu chưa có
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
+
+          # Áp script schema/data từ repo root
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
 
       - name: Run tests (VSTest)
         if: steps.find_tests.outputs.found != ''
