@@ -19,6 +19,7 @@
     <Reference Include="System.Web.Routing" />
     <Reference Include="System.Transactions" />
     <PackageReference Include="EntityFramework" Version="6.2.0" />
+    <Compile Include="Controllers\HealthController.cs" />
   </ItemGroup>
 
   <ItemGroup>
