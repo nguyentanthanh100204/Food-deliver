@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Web.Mvc;
 using FoodOrderingSystem.Controllers;
+using FoodOrderingSystem.Tests; // TestCategories
 
 namespace FoodOrderingSystem.Tests.Controllers
 {
@@ -8,6 +9,8 @@ namespace FoodOrderingSystem.Tests.Controllers
     public class HealthControllerIntegrationTests
     {
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void Index_Returns_OK()
         {
             // Arrange

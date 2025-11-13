@@ -2,7 +2,7 @@ name: ci
 on:
   pull_request:
   push:
-    branches: [ main ]  
+    branches: [ main ]
 
 jobs:
   build:
@@ -10,10 +10,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup NuGet
         uses: nuget/setup-nuget@v2
-
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
@@ -23,14 +21,12 @@ jobs:
           Write-Host "=== Scan repo for .sln / .csproj ==="
           $solutions = Get-ChildItem -Recurse -Filter *.sln | Select-Object -Expand FullName
           $projects  = Get-ChildItem -Recurse -Filter *.csproj | Select-Object -Expand FullName
-          Write-Host "Found solutions:" ($solutions -join "`n")
-          Write-Host "Found projects :" ($projects -join "`n")
+          Write-Host "Found solutions:`n$($solutions -join "`n")"
+          Write-Host "Found projects :`n$($projects -join "`n")"
 
           if ($solutions) {
             foreach ($sln in $solutions) {
-              Write-Host "NuGet restore $sln"
               nuget restore "$sln"
-              Write-Host "MSBuild $sln (Release)"
               msbuild "$sln" /p:Configuration=Release /m
             }
             exit 0
@@ -38,106 +34,173 @@ jobs:
 
           if ($projects) {
             foreach ($csproj in $projects) {
-              Write-Host "NuGet restore $csproj"
               nuget restore "$csproj"
-              Write-Host "MSBuild $csproj (Release)"
               msbuild "$csproj" /p:Configuration=Release /m
             }
             exit 0
           }
 
-          Write-Error "No .sln or .csproj found in repository. Please commit your solution/project files."
+          Write-Error "No .sln or .csproj found in repository."
           exit 1
-      - name: Discover test assemblies
-        id: find_tests
+
+  unit_tests:
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build tests (Release)
         shell: pwsh
         run: |
-          Write-Host "=== Discover *Tests.dll ==="
-          $dlls = Get-ChildItem -Recurse -Filter *Tests.dll -Path . |
-                  Where-Object { $_.FullName -notmatch 'TestAdapter|\\obj\\|\\bin\\Debug' } |
-                  Select-Object -Expand FullName
+          # 1) Restore cho các project kiểu packages.config (toàn solution)
+          nuget restore FoodOrderingSystem.sln
       
-          if ($dlls) {
-            "found=$($dlls -join '::')" | Out-File -Append $env:GITHUB_OUTPUT
-            Write-Host "Found:`n$($dlls -join "`n")"
-          } else {
-            "found=" | Out-File -Append $env:GITHUB_OUTPUT
-            Write-Host "No *Tests.dll found"
+          # 2) Restore chuẩn cho các project PackageReference trong solution (nếu có)
+          msbuild FoodOrderingSystem.sln -t:Restore
+      
+          # 3) Restore RIÊNG cho project test (vì có thể không nằm trong .sln)
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj -t:Restore
+      
+          # 4) Build project test để chắc chắn sinh DLL
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
+
+
+
+      - name: Install OpenCover & ReportGenerator
+        shell: pwsh
+        run: |
+          choco install opencover.portable -y
+          # try choco first
+          $ok = $true
+          try { choco install reportgenerator.portable -y } catch { $ok = $false }
+          if (-not (Get-Command reportgenerator -ErrorAction SilentlyContinue)) { $ok = $false }
+          if (-not $ok) {
+            Write-Host "Falling back to dotnet global tool for ReportGenerator..."
+            dotnet tool install -g dotnet-reportgenerator-globaltool
+            "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
+
+      - name: Locate VSTest
+        id: vs
+        shell: pwsh
+        run: |
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -property installationPath
+          if (-not $vsPath) { throw "Cannot find Visual Studio" }
+          $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
+          echo "vstest=$vstest" >> $env:GITHUB_OUTPUT
+
+      - name: Run UNIT tests with coverage
+        shell: pwsh
+        run: |
+          # Ưu tiên Release, fallback Debug, chỉ trong thư mục project test
+          $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
+          $testDlls = Get-ChildItem -Recurse -Path $bin -Include *Tests*.dll -File `
+                        | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' -and $_.FullName -notmatch 'TestAdapter' }
+
+          if (-not $testDlls -or $testDlls.Count -eq 0) {
+            Write-Host "Không thấy *Tests*.dll trong $bin. In cấu trúc để debug:"
+            Get-ChildItem -Recurse -Path $bin | Select-Object FullName
+            throw "Test DLL not found"
+          }
+
+          $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Release\\' } | Select-Object -First 1
+          if (-not $candidate) { $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Debug\\' } | Select-Object -First 1 }
+
+          Write-Host "Using test DLL: $($candidate.FullName)"
+          New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
+
+          OpenCover.Console.exe -register:user `
+            -target:"${{ steps.vs.outputs.vstest }}" `
+            -targetargs:"`"$($candidate.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:TestCategory=Unit" `
+            -output:"unit-coverage.xml" `
+            -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
+
+          reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
+
+
+
+      - name: Enforce coverage threshold (60%)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "unit-coverage.xml")) { throw "Coverage file not found" }
+          [xml]$cov = Get-Content unit-coverage.xml
+          $summary = $cov.GetElementsByTagName("Summary") | Select-Object -First 1
+          if (-not $summary) { throw "Coverage summary not found" }
+          $seqp = [double]$summary.sequenceCoverage
+          Write-Host "Sequence coverage: $seqp %"
+          if ($seqp -lt 60) { throw "Coverage below threshold (60%). Current: $seqp%" }
+
+      - name: Upload unit results & coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-results-and-coverage
+          path: |
+            out/unit-results/*.trx
+            unit-coverage.xml
+            unit-coveragereport/**
+
+  integration_tests:
+    if: github.event_name == 'push'   # chỉ chạy khi push/merge vào main
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Build tests (Release)
+        run: |
+          nuget restore
+          msbuild FoodOrderingSystem.sln /p:Configuration=Release
 
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
+          # Khớp với App.config của project test (mặc định dùng MSSQLLocalDB)
           sqllocaldb start "MSSQLLocalDB" | Out-Null
-
-          # Tạo DB nếu chưa có
           sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
-
-          # Áp script schema/data từ repo root
           sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
 
-      - name: Run tests (VSTest)
+      - name: Locate VSTest
+        id: vs
         shell: pwsh
         run: |
-          $assemblies = @()
-          if ("${{ steps.find_tests.outputs.found }}" -ne "") {
-            $assemblies = "${{ steps.find_tests.outputs.found }}".Split("::")
-          }
-      
-          if ($assemblies.Count -eq 0) {
-            Write-Host "No test assemblies to run. Skipping vstest."
-            exit 0
-          }
-      
-          $out = "$PWD\out\test-results"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-      
-          # tìm vstest.console.exe
-          $vswhere = "${Env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $vstest  = & $vswhere -latest -products * -requires Microsoft.Component.TestTools.BuildTools -find **\vstest.console.exe
-          if (-not $vstest) {
-            $vstest = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
-          }
-          Write-Host "Using vstest: $vstest"
-      
-          foreach ($asm in $assemblies) {
-            & "$vstest" "$asm" `
-              --logger:"trx;LogFileName=$(Split-Path $asm -Leaf).trx" `
-              /ResultsDirectory:"$out"
-          }
-      
-          Write-Host "Result files:"
-          Get-ChildItem $out -Filter *.trx -Recurse | ForEach-Object { Write-Host $_.FullName }
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -property installationPath
+          $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
+          echo "vstest=$vstest" >> $env:GITHUB_OUTPUT
 
-      
-      - name: Upload test results
-        if: ${{ always() && hashFiles('out/test-results/*.trx') != '' }}
+      - name: Run INTEGRATION tests
+        shell: pwsh
+        run: |
+          $testDll = Get-ChildItem -Recurse -Filter FoodOrderingSystem.Tests.dll | Where-Object { $_.FullName -like "*\bin\Release\*" } | Select-Object -First 1
+          & "${{ steps.vs.outputs.vstest }}" "`"$($testDll.FullName)`"" /Logger:trx /ResultsDirectory:"$PWD\out\integration-results" /TestCaseFilter:"TestCategory=Integration"
+
+      - name: Upload integration results
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: out/test-results/*.trx
+          name: integration-results
+          path: out/integration-results/*.trx
 
-
-
-      # ---- chỉ chạy nếu toàn bộ bước trước thành công ----
+  package:
+    needs: [unit_tests]         # chỉ package khi unit pass; muốn chỉ khi push thì thêm điều kiện if
+    runs-on: windows-latest
+    if: ${{ success() }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
       - name: Package Web App (WebDeploy zip)
-        if: ${{ success() }}
         shell: pwsh
         run: |
-          # tìm file .csproj của web (đổi tên nếu dự án không phải FoodOrderingSystem.csproj)
           $proj = Get-ChildItem -Recurse -Filter FoodOrderingSystem.csproj | Select-Object -First 1 -Expand FullName
           if (-not $proj) { throw "Không tìm thấy FoodOrderingSystem.csproj" }
-
-          # build + tạo gói WebDeploy (.zip)
-          & msbuild $proj `
+          msbuild $proj `
             /p:Configuration=Release `
             /p:DeployOnBuild=true `
             /p:WebPublishMethod=Package `
             /p:PackageAsSingleFile=true `
             /p:PackageLocation="$PWD\out\FoodOrderingSystem.zip"
-
       - name: Upload deploy artifact
-        if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
           name: webdeploy-package

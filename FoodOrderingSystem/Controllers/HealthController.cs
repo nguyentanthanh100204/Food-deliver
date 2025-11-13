@@ -1,15 +1,13 @@
+using System.Net;
 using System.Web.Mvc;
 
-namespace FoodOrderingSystem.Controllers
+public class HealthController : Controller
 {
-    public class HealthController : Controller
+    [HttpGet]
+    [AllowAnonymous]
+    public ActionResult Index()
     {
-        [HttpGet]
-        [AllowAnonymous]
-        public ContentResult Index()
-        {
-            // Không đụng DB hay dịch vụ nào khác -> Chỉ để kiểm tra app còn “sống”
-            return Content("OK");
-        }
+        // Trả về HTTP 200 đúng như test mong đợi
+        return new HttpStatusCodeResult(HttpStatusCode.OK);
     }
 }

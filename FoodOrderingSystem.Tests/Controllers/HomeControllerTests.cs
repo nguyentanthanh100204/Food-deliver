@@ -3,6 +3,8 @@ using System.Web.Mvc;
 using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Models;
 using System.Collections.Generic;
+using FoodOrderingSystem.Tests; // TestCategories
+
 
 namespace FoodOrderingSystem.Tests.Controllers
 {
@@ -10,6 +12,8 @@ namespace FoodOrderingSystem.Tests.Controllers
     public class HomeControllerTests
     {
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void Index_WhenCalled_ReturnsIndexView()
         {
             var controller = new HomeController();

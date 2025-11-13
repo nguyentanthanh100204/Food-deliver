@@ -3,13 +3,17 @@ using System.Linq;
 using System.Transactions;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FoodOrderingSystem.Models;
+using FoodOrderingSystem.Tests;                 // để dùng TestCategories
+using FoodOrderingSystem.Tests.Integration;     // để kế thừa IntegrationTestBase
+
 
 namespace FoodOrderingSystem.Tests.Integration
 {
     [TestClass]
-    public class ItemCrudSmokeTests
+    public class ItemCrudSmokeTests : IntegrationTestBase
     {
         [TestMethod]
+        [TestCategory(TestCategories.Integration)]
         public void TblItem_InsertReadDelete_Rollbacked()
         {
             using (var scope = new TransactionScope())

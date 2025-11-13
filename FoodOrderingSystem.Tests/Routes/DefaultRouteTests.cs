@@ -3,6 +3,8 @@ using System.Web;
 using System.Web.Routing;
 using Moq;
 using FoodOrderingSystem; // RouteConfig.RegisterRoutes
+using FoodOrderingSystem.Tests; // TestCategories
+
 
 namespace FoodOrderingSystem.Tests.Routes
 {
@@ -10,6 +12,8 @@ namespace FoodOrderingSystem.Tests.Routes
     public class DefaultRouteTests
     {
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void RootUrl_Maps_To_Home_Index()
         {
             // Arrange

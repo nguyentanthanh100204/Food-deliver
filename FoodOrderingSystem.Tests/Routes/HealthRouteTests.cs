@@ -4,6 +4,8 @@ using System.Web.Mvc;      // (để dùng UrlParameter nếu cần)
 using System.Web.Routing;
 using Moq;
 using FoodOrderingSystem;  // RouteConfig.RegisterRoutes
+using FoodOrderingSystem.Tests; // TestCategories
+
 
 namespace FoodOrderingSystem.Tests.Routes
 {
@@ -11,6 +13,8 @@ namespace FoodOrderingSystem.Tests.Routes
     public class HealthRouteTests
     {
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void HealthUrl_Maps_To_Health_Index()
         {
             // Arrange: đăng ký route giống lúc app khởi động

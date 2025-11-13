@@ -8,6 +8,9 @@ using System.Transactions;
 using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Models;
 using OnlineFoodOrderingSystem.Models.ViewModel;
+using FoodOrderingSystem.Tests; // TestCategories
+using FoodOrderingSystem.Tests.TestHelpers; // hoặc đúng namespace của FakeSession.cs
+
 
 namespace FoodOrderingSystem.Tests.Controllers
 {
@@ -26,6 +29,8 @@ namespace FoodOrderingSystem.Tests.Controllers
         }
 
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void ShoppingCartList_WhenCalled_ReturnsViewAndViewModel()
         {
             // Arrange
@@ -48,3 +53,5 @@ namespace FoodOrderingSystem.Tests.Controllers
             // chỉ kiểm tra object tồn tại
             Assert.IsNotNull(vm.CartItems);
         }
+    }
+}

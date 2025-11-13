@@ -1,13 +1,17 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Web.Mvc;
 using FoodOrderingSystem.Controllers;
+using FoodOrderingSystem.Tests;                 // để dùng TestCategories
+using FoodOrderingSystem.Tests.Integration;     // để kế thừa IntegrationTestBase
+
 
 namespace FoodOrderingSystem.Tests.Integration
 {
     [TestClass]
-    public class HealthEndpointTests
+    public class HealthEndpointTests : IntegrationTestBase
     {
         [TestMethod]
+        [TestCategory(TestCategories.Integration)]
         public void Health_Index_Returns_OK()
         {
             // Arrange

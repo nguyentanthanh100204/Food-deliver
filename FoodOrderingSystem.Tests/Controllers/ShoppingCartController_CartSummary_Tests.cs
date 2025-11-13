@@ -3,8 +3,10 @@ using System.Web;
 using System.Web.Mvc;
 using System.Web.Routing;
 using Moq;
-
+using FoodOrderingSystem.Tests; // TestCategories
 using FoodOrderingSystem.Controllers;
+using FoodOrderingSystem.Tests.TestHelpers; 
+
 
 namespace FoodOrderingSystem.Tests.Controllers
 {
@@ -21,6 +23,8 @@ namespace FoodOrderingSystem.Tests.Controllers
         }
 
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
+
         public void CartSummary_ReturnsPartial_CartSummary()
         {
             // Arrange
