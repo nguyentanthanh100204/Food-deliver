@@ -50,15 +50,35 @@ jobs:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
   
-      # Build Debug + PDB full để tool coverage ánh xạ được
       - name: Build tests (Debug with PDB)
         shell: pwsh
         run: |
+          # 1) Restore cho các project kiểu packages.config trong .sln
           nuget restore FoodOrderingSystem.sln
+      
+          # 2) Restore chuẩn cho các project dùng PackageReference TRONG .sln (nếu có)
           msbuild FoodOrderingSystem.sln -t:Restore
-          msbuild FoodOrderingSystem.sln /p:Configuration=Debug /p:DebugSymbols=true /p:DebugType=Full /m
-          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Debug /p:DebugSymbols=true /p:DebugType=Full /m
-          Get-ChildItem -Recurse .\FoodOrderingSystem.Tests\bin\Debug -Filter *.pdb | Select-Object FullName
+      
+          # 3) ***Restore RIÊNG cho project test*** (vì dùng PackageReference / có thể không nằm trong .sln)
+          msbuild ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" -t:Restore
+      
+          # 4) Build solution Debug + PDB full
+          msbuild FoodOrderingSystem.sln `
+            /p:Configuration=Debug `
+            /p:DebugSymbols=true `
+            /p:DebugType=Full `
+            /m
+      
+          # 5) Build riêng project test để chắc chắn sinh DLL + PDB
+          msbuild ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            /p:Configuration=Debug `
+            /p:DebugSymbols=true `
+            /p:DebugType=Full `
+            /m
+      
+          # 6) In ra PDB để kiểm tra
+          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
+
   
       # Tìm vstest.console.exe (VS)
       - name: Locate VSTest
