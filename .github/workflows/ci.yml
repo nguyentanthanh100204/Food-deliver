@@ -14,6 +14,15 @@ jobs:
         uses: nuget/setup-nuget@v2
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            **/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.config', 'nuget.config', '**/global.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
       - name: Restore & Build (.sln or .csproj)
         shell: pwsh
@@ -23,6 +32,14 @@ jobs:
           $projects  = Get-ChildItem -Recurse -Filter *.csproj | Select-Object -Expand FullName
           Write-Host "Found solutions:`n$($solutions -join "`n")"
           Write-Host "Found projects :`n$($projects -join "`n")"
+              # restore kiểu packages.config
+          nuget restore FoodOrderingSystem.sln
+      
+          # restore kiểu PackageReference (nếu có)
+          msbuild FoodOrderingSystem.sln -t:Restore
+      
+          # build
+          msbuild FoodOrderingSystem.sln /p:Configuration=Debug /m
 
           if ($solutions) {
             foreach ($sln in $solutions) {
