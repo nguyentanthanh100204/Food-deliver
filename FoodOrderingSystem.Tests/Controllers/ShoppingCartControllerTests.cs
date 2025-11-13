@@ -9,6 +9,7 @@ using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Models;
 using OnlineFoodOrderingSystem.Models.ViewModel;
 using FoodOrderingSystem.Tests; // TestCategories
+using FoodOrderingSystem.Tests.TestHelpers; // hoặc đúng namespace của FakeSession.cs
 
 
 namespace FoodOrderingSystem.Tests.Controllers
