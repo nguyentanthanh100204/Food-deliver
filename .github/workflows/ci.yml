@@ -79,37 +79,54 @@ jobs:
             dotnet tool install -g dotnet-reportgenerator-globaltool
             "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
+      - name: Install OpenCover & ReportGenerator
+        shell: pwsh
+        run: |
+          choco install opencover.portable -y
+          $ok = $true
+          try { choco install reportgenerator.portable -y } catch { $ok = $false }
+          if (-not (Get-Command reportgenerator -ErrorAction SilentlyContinue)) { $ok = $false }
+          if (-not $ok) {
+            dotnet tool install -g dotnet-reportgenerator-globaltool
+            "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
 
       - name: Run UNIT tests with coverage (OpenCover)
         shell: pwsh
         run: |
-          # tìm đúng DLL test (ưu tiên Release rồi Debug)
+          # Resolve OpenCover path (ưu tiên Get-Command, fallback vào thư mục Chocolatey)
+          $oc = (Get-Command OpenCover.Console.exe -ErrorAction SilentlyContinue).Source
+          if (-not $oc) {
+            $oc = Join-Path $env:ChocolateyInstall 'lib\opencover.portable\tools\OpenCover.Console.exe'
+          }
+          if (-not (Test-Path $oc)) { throw "OpenCover not found at: $oc" }
+
+          # Tìm đúng DLL test (ưu tiên Release rồi Debug)
           $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
           $testDll = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll `
-                     | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' } `
-                     | Select-Object -First 1
+                      | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' } `
+                      | Select-Object -First 1
           if (-not $testDll) { throw "Không tìm thấy FoodOrderingSystem.Tests.dll" }
 
-          # locate vstest
+          # Locate VSTest
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-                     -latest -products * `
-                     -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core `
-                     -property installationPath
+                    -latest -products * `
+                    -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core `
+                    -property installationPath
           if (-not $vsPath) { throw "Không tìm thấy Visual Studio" }
           $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
 
           New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
-          # CHẠY KHÔNG DÙNG TestCaseFilter để đảm bảo có test chạy
-          OpenCover.Console.exe -register:user `
+          # CHẠY KHÔNG FILTER để chắc chắn có test chạy (nếu muốn lọc thì thêm lại /TestCaseFilter)
+          & $oc -register:user `
             -target:"$vstest" `
             -targetargs:@($testDll.FullName, '/Logger:trx', "/ResultsDirectory:$PWD\out\unit-results") `
             -output:"unit-coverage.xml" `
             -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
 
-          # Tạo báo cáo
           reportgenerator -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Html;TextSummary"
-
 
 
       - name: Enforce coverage threshold (60%)
