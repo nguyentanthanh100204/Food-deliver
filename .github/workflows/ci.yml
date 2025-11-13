@@ -222,17 +222,25 @@ jobs:
           "dll=$($dll.FullName)" >> $env:GITHUB_OUTPUT
           Write-Host "Using test DLL: $($dll.FullName)"
   
-      # 5) Chạy INTEGRATION tests với DLL vừa tìm
       - name: Run INTEGRATION tests
         shell: pwsh
         run: |
-          $dll = "${{ steps.finddll.outputs.dll }}"
-          if (-not (Test-Path $dll)) { throw "Không tìm thấy DLL test: $dll" }
-  
-          New-Item -ItemType Directory -Force -Path "$PWD\out\integration-results" | Out-Null
-          & "${{ steps.vs.outputs.vstest }}" "`"$dll`"" /Logger:trx `
-            /ResultsDirectory:"$PWD\out\integration-results" `
+          $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll'
+          if (-not (Test-Path $dll)) {
+            Write-Error "Không tìm thấy DLL test: $dll"
+            exit 1
+          }
+      
+          $out = Join-Path $PWD 'out\integration-results'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+      
+          # ĐỪNG bọc $dll bằng thêm dấu " "
+          & "${{ steps.vs.outputs.vstest }}" `
+            $dll `
+            /Logger:trx `
+            /ResultsDirectory:$out `
             /TestCaseFilter:"TestCategory=Integration"
+
   
       - name: Upload integration results
         uses: actions/upload-artifact@v4
