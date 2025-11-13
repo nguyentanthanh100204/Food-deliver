@@ -56,9 +56,19 @@ jobs:
           msbuild FoodOrderingSystem.sln /p:Configuration=Release
 
       - name: Install OpenCover & ReportGenerator
+        shell: pwsh
         run: |
           choco install opencover.portable -y
-          choco install reportgenerator -y
+          # try choco first
+          $ok = $true
+          try { choco install reportgenerator.portable -y } catch { $ok = $false }
+          if (-not (Get-Command reportgenerator -ErrorAction SilentlyContinue)) { $ok = $false }
+          if (-not $ok) {
+            Write-Host "Falling back to dotnet global tool for ReportGenerator..."
+            dotnet tool install -g dotnet-reportgenerator-globaltool
+            "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
+
 
       - name: Locate VSTest
         id: vs
@@ -79,7 +89,7 @@ jobs:
             -targetargs:"`"$($testDll.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:TestCategory=Unit" `
             -output:"unit-coverage.xml" `
             -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
-          ReportGenerator.exe -reports:unit-coverage.xml -targetdir:unit-coveragereport
+          reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
 
       - name: Enforce coverage threshold (60%)
         if: github.event_name == 'pull_request'
