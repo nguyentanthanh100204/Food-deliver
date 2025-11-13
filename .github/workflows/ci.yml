@@ -53,12 +53,18 @@ jobs:
       - name: Build tests (Release)
         shell: pwsh
         run: |
-          # Restore chung cho solution (packages.config + PackageReference)
+          # 1) Restore cho các project kiểu packages.config (toàn solution)
           nuget restore FoodOrderingSystem.sln
+      
+          # 2) Restore chuẩn cho các project PackageReference trong solution (nếu có)
           msbuild FoodOrderingSystem.sln -t:Restore
-
-          # Build trực tiếp project test để chắc chắn có DLL
+      
+          # 3) Restore RIÊNG cho project test (vì có thể không nằm trong .sln)
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj -t:Restore
+      
+          # 4) Build project test để chắc chắn sinh DLL
           msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
+
 
 
       - name: Install OpenCover & ReportGenerator
