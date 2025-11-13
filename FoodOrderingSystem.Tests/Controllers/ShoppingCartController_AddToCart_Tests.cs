@@ -7,6 +7,7 @@ using System.Web.Routing;
 using Moq;
 using FoodOrderingSystem.Tests;                 // TestCategories
 using FoodOrderingSystem.Tests.Integration;     // IntegrationTestBase
+using FoodOrderingSystem.Tests.TestHelpers; // hoặc đúng namespace của FakeSession.cs
 
 
 using FoodOrderingSystem.Controllers;   // ShoppingCartController
