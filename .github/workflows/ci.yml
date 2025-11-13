@@ -93,23 +93,38 @@ jobs:
           # tạo thư mục kết quả
           New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
-          # chạy VSTest + thu coverage bằng data collector "XPlat Code Coverage"
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -property installationPath
+          # locate vstest
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+                     -latest -products * `
+                     -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core `
+                     -property installationPath
+          if (-not $vsPath) { throw "Không tìm thấy Visual Studio" }
           $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
 
-          & "$vstest" "`"$($testDll.FullName)`"" `
-            /Logger:trx `
-            /ResultsDirectory:"$PWD\out\unit-results" `
-            /TestCaseFilter:"TestCategory=Unit" `
-            /collect:"XPlat Code Coverage"
+          # (QUAN TRỌNG) Truyền tham số theo mảng, KHÔNG tự bọc bằng dấu ngoặc kép
+          $args = @(
+            $testDll.FullName
+            '/Logger:trx'
+            "/ResultsDirectory:$PWD\out\unit-results"
+            '/TestCaseFilter:TestCategory=Unit'
+            '/collect:"XPlat Code Coverage"'
+          )
+          & $vstest @args
 
-          # lấy file cobertura do coverlet sinh ra
+          # debug: liệt kê thư mục TestResults để dễ tra khi cần
+          if (Test-Path "$PWD\TestResults") {
+            Write-Host "== TestResults tree =="
+            Get-ChildItem -Recurse "$PWD\TestResults" | Select-Object FullName
+          }
+
+          # lấy file cobertura
           $cov = Get-ChildItem -Recurse -Path "$PWD\TestResults" -Filter "coverage.cobertura.xml" | Select-Object -First 1
           if (-not $cov) { throw "Không tìm thấy coverage.cobertura.xml" }
           Copy-Item $cov.FullName -Destination "$PWD\unit-coverage.xml" -Force
 
-          # tạo báo cáo HTML + summary
+          # tạo báo cáo
           reportgenerator -reports:"$PWD\unit-coverage.xml" -targetdir:"$PWD\unit-coveragereport" -reporttypes:"Html;TextSummary"
+
 
       - name: Enforce coverage threshold (60%)
         if: github.event_name == 'pull_request'
