@@ -52,3 +52,5 @@ namespace FoodOrderingSystem.Tests.Controllers
             // chỉ kiểm tra object tồn tại
             Assert.IsNotNull(vm.CartItems);
         }
+    }
+}
