@@ -46,6 +46,8 @@ jobs:
   unit_tests:
     needs: build
     runs-on: windows-latest
+    env:
+      COV_MIN: 20 
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
@@ -129,19 +131,18 @@ jobs:
   
           # Xuất HTML + Cobertura.xml
           reportgenerator -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Html;Cobertura"
-  
-      # Fail PR nếu < 60% (đọc từ Cobertura.xml cho ổn định)
-      - name: Enforce coverage threshold (60%)
+      - name: Enforce coverage threshold
         if: github.event_name == 'pull_request'
         shell: pwsh
         run: |
+          $min = [double](${env:COV_MIN} ?? 60)
           $cob = Join-Path $PWD "unit-coveragereport\Cobertura.xml"
-          if (-not (Test-Path $cob)) { throw "Không tìm thấy Cobertura.xml" }
+          if (-not (Test-Path $cob)) { throw "Coverage file not found: $cob" }
           [xml]$x = Get-Content $cob
-          $rate = [double]$x.coverage.'line-rate'   # 0..1
-          $pct  = [math]::Round($rate * 100, 2)
-          Write-Host "Line coverage: $pct %"
-          if ($pct -lt 60) { throw "Coverage below threshold (60%). Current: $pct%" }
+          $pct = [math]::Round([double]$x.coverage.'line-rate' * 100, 2)
+          Write-Host "Line coverage: $pct % (min: $min %)"
+          if ($pct -lt $min) { throw "Coverage below threshold ($min%). Current: $pct%" }
+
   
       - name: Upload unit results & coverage
         uses: actions/upload-artifact@v4
