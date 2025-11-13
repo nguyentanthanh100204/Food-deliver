@@ -158,53 +158,77 @@ jobs:
     if: github.event_name == 'push'   # chỉ chạy khi push/merge vào main
     needs: build
     runs-on: windows-latest
+  
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-
-      - name: Build tests (Release)
+  
+      # 1) Restore + Build Release (toàn solution) và build riêng test project
+      - name: Build (Release) for integration tests
+        shell: pwsh
         run: |
           nuget restore
-          msbuild FoodOrderingSystem.sln /p:Configuration=Release
-
+          msbuild FoodOrderingSystem.sln -t:Restore
+          msbuild FoodOrderingSystem.sln /p:Configuration=Release /m
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
+  
+      # 2) SQL LocalDB + seed schema
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
-          # Khớp với App.config của project test (mặc định dùng MSSQLLocalDB)
           sqllocaldb start "MSSQLLocalDB" | Out-Null
           sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
           sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
-
+  
+      # 3) Tìm đường dẫn VSTest
       - name: Locate VSTest
         id: vs
         shell: pwsh
         run: |
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core -property installationPath
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+                      -latest -products * `
+                      -requires Microsoft.VisualStudio.PackageGroup.TestTools.Core `
+                      -property installationPath
+          if (-not $vsPath) { throw "Cannot find Visual Studio" }
           $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
-          echo "vstest=$vstest" >> $env:GITHUB_OUTPUT
-
+          "vstest=$vstest" >> $env:GITHUB_OUTPUT
+  
+      # 4) Tìm DLL test linh hoạt (ưu tiên Release; fallback Debug; mọi TFM)
+      - name: Locate test DLL (prefer Release, fallback Debug)
+        id: finddll
+        shell: pwsh
+        run: |
+          $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
+          $candidates = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll -File |
+                        Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' }
+          if (-not $candidates) {
+            Write-Host "Không thấy DLL trong $bin. In cây thư mục để debug:"
+            Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin" | Select-Object FullName
+            throw "FoodOrderingSystem.Tests.dll not found"
+          }
+          $dll = $candidates | Where-Object { $_.FullName -match '\\bin\\Release\\' } | Select-Object -First 1
+          if (-not $dll) { $dll = $candidates | Where-Object { $_.FullName -match '\\bin\\Debug\\' } | Select-Object -First 1 }
+          "dll=$($dll.FullName)" >> $env:GITHUB_OUTPUT
+          Write-Host "Using test DLL: $($dll.FullName)"
+  
+      # 5) Chạy INTEGRATION tests với DLL vừa tìm
       - name: Run INTEGRATION tests
         shell: pwsh
         run: |
-          $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll'
-          if (-not (Test-Path $dll)) {
-            Write-Error "Không tìm thấy DLL test: $dll. Hãy kiểm tra bước build (đúng cấu hình Release chưa?)."
-            exit 1
-          }
-
+          $dll = "${{ steps.finddll.outputs.dll }}"
+          if (-not (Test-Path $dll)) { throw "Không tìm thấy DLL test: $dll" }
+  
           New-Item -ItemType Directory -Force -Path "$PWD\out\integration-results" | Out-Null
-
-          & "${{ steps.vs.outputs.vstest }}" `
-            "`"$dll`"" `
-            /Logger:trx `
+          & "${{ steps.vs.outputs.vstest }}" "`"$dll`"" /Logger:trx `
             /ResultsDirectory:"$PWD\out\integration-results" `
             /TestCaseFilter:"TestCategory=Integration"
-
+  
       - name: Upload integration results
         uses: actions/upload-artifact@v4
         with:
           name: integration-results
           path: out/integration-results/*.trx
+
 
   package:
     needs: [unit_tests]         # chỉ package khi unit pass; muốn chỉ khi push thì thêm điều kiện if
