@@ -5,6 +5,9 @@ using System.Web;
 using System.Web.Mvc;
 using System.Web.Routing;
 using Moq;
+using FoodOrderingSystem.Tests;                 // TestCategories
+using FoodOrderingSystem.Tests.Integration;     // IntegrationTestBase
+
 
 using FoodOrderingSystem.Controllers;   // ShoppingCartController
 using FoodOrderingSystem.Models;        // OnlineFoodDBEntities
@@ -12,7 +15,7 @@ using FoodOrderingSystem.Models;        // OnlineFoodDBEntities
 namespace FoodOrderingSystem.Tests.Controllers
 {
     [TestClass]
-    public class ShoppingCartController_AddToCart_Tests
+    public class ShoppingCartController_AddToCart_Tests : IntegrationTestBase
     {
         /// <summary>
         /// Tạo ControllerContext tối thiểu để ShoppingCart.GetCart(HttpContext) hoạt động.
@@ -29,6 +32,7 @@ namespace FoodOrderingSystem.Tests.Controllers
         }
 
         [TestMethod]
+        [TestCategory(TestCategories.Integration)]
         public void AddToCart_WithExistingItem_RedirectsToShoppingCartList()
         {
             // Bọc giao dịch để mọi ghi phát sinh (nếu có) sẽ ROLLBACK sau test
