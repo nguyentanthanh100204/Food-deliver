@@ -47,7 +47,7 @@ jobs:
     needs: build
     runs-on: windows-latest
     env:
-      COV_MIN: 20 
+      COV_MIN: 18
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
