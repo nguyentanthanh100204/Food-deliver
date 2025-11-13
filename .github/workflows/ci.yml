@@ -80,18 +80,15 @@ jobs:
             "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
 
-      - name: Run UNIT tests with coverage (Coverlet)
+      - name: Run UNIT tests with coverage (OpenCover)
         shell: pwsh
         run: |
-          # tìm đúng DLL test (ưu tiên Release)
+          # tìm đúng DLL test (ưu tiên Release rồi Debug)
           $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
-          $testDll = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll |
-                     Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' } |
-                     Sort-Object FullName -Descending | Select-Object -First 1
+          $testDll = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll `
+                     | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' } `
+                     | Select-Object -First 1
           if (-not $testDll) { throw "Không tìm thấy FoodOrderingSystem.Tests.dll" }
-
-          # tạo thư mục kết quả
-          New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
           # locate vstest
           $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
@@ -101,29 +98,18 @@ jobs:
           if (-not $vsPath) { throw "Không tìm thấy Visual Studio" }
           $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
 
-          # (QUAN TRỌNG) Truyền tham số theo mảng, KHÔNG tự bọc bằng dấu ngoặc kép
-          $args = @(
-            $testDll.FullName
-            '/Logger:trx'
-            "/ResultsDirectory:$PWD\out\unit-results"
-            '/TestCaseFilter:TestCategory=Unit'
-            '/collect:"XPlat Code Coverage"'
-          )
-          & $vstest @args
+          New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
-          # debug: liệt kê thư mục TestResults để dễ tra khi cần
-          if (Test-Path "$PWD\TestResults") {
-            Write-Host "== TestResults tree =="
-            Get-ChildItem -Recurse "$PWD\TestResults" | Select-Object FullName
-          }
+          # CHẠY KHÔNG DÙNG TestCaseFilter để đảm bảo có test chạy
+          OpenCover.Console.exe -register:user `
+            -target:"$vstest" `
+            -targetargs:@($testDll.FullName, '/Logger:trx', "/ResultsDirectory:$PWD\out\unit-results") `
+            -output:"unit-coverage.xml" `
+            -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
 
-          # lấy file cobertura
-          $cov = Get-ChildItem -Recurse -Path "$PWD\TestResults" -Filter "coverage.cobertura.xml" | Select-Object -First 1
-          if (-not $cov) { throw "Không tìm thấy coverage.cobertura.xml" }
-          Copy-Item $cov.FullName -Destination "$PWD\unit-coverage.xml" -Force
+          # Tạo báo cáo
+          reportgenerator -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Html;TextSummary"
 
-          # tạo báo cáo
-          reportgenerator -reports:"$PWD\unit-coverage.xml" -targetdir:"$PWD\unit-coveragereport" -reporttypes:"Html;TextSummary"
 
 
       - name: Enforce coverage threshold (60%)
