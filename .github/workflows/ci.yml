@@ -162,15 +162,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      - uses: actions/setup-dotnet@v4        # để dùng lệnh dotnet (SDK)
+        with:
+          dotnet-version: '9.x'
   
-      # 1) Restore + Build Release (toàn solution) và build riêng test project
       - name: Build (Release) for integration tests
         shell: pwsh
         run: |
+          # Restore cho solution kiểu packages.config (nếu có)
           nuget restore
           msbuild FoodOrderingSystem.sln -t:Restore
+  
+          # 👉 Restore RIÊNG cho project test (SDK-style)
+          dotnet restore .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj
+  
+          # Build solution Release
           msbuild FoodOrderingSystem.sln /p:Configuration=Release /m
+  
+          # Build riêng project test để chắc chắn có DLL
           msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
+
   
       # 2) SQL LocalDB + seed schema
       - name: Prepare SQL LocalDB and seed schema
