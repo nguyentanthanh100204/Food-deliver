@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using System.Web;
 
-namespace FoodOrderingSystem.Tests
+namespace namespace FoodOrderingSystem.Tests.TestHelpers
+
 {
     public class FakeSession : HttpSessionStateBase
     {
