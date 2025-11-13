@@ -19,6 +19,9 @@
     <Reference Include="System.Web.Routing" />
     <Reference Include="System.Transactions" />
     <PackageReference Include="EntityFramework" Version="6.2.0" />
+    <PackageReference Include="coverlet.collector" Version="6.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
