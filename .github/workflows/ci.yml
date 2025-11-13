@@ -53,19 +53,10 @@ jobs:
       - name: Build tests (Release)
         shell: pwsh
         run: |
-          # 1) Restore cho các project kiểu packages.config (toàn solution)
           nuget restore FoodOrderingSystem.sln
-      
-          # 2) Restore chuẩn cho các project PackageReference trong solution (nếu có)
           msbuild FoodOrderingSystem.sln -t:Restore
-      
-          # 3) Restore RIÊNG cho project test (vì có thể không nằm trong .sln)
           msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj -t:Restore
-      
-          # 4) Build project test để chắc chắn sinh DLL
-          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
-
-
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Debug /m
 
       - name: Install OpenCover & ReportGenerator
         shell: pwsh
@@ -93,22 +84,28 @@ jobs:
       - name: Run UNIT tests with coverage
         shell: pwsh
         run: |
-          $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll'
-          if (-not (Test-Path $dll)) {
-            Write-Error "Không tìm thấy DLL test: $dll. Hãy kiểm tra bước build (đúng cấu hình Release chưa?)."
-            exit 1
-          }
+      - name: Run UNIT tests with coverage
+        shell: pwsh
+        run: |
+          $testDll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll'
+          if (-not (Test-Path $testDll)) { throw "Không thấy DLL: $testDll" }
+
+          # thư mục chứa code thực tế (SUT) để OpenCover tra cứu PDB
+          $sutDir = Join-Path $PWD 'FoodOrderingSystem\bin\Debug'
 
           New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
-          # Chạy qua OpenCover nhưng CHỈ target đúng 1 DLL — không còn wildcard nào truyền vào vstest
           OpenCover.Console.exe -register:user `
             -target:"${{ steps.vs.outputs.vstest }}" `
-            -targetargs:"`"$dll`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:`"TestCategory=Unit|TestCategory=Smoke`"" `
+            -targetargs:"`"$testDll`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:`"TestCategory=Unit|TestCategory=Smoke`"" `
             -output:"unit-coverage.xml" `
-            -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
-
+            -filter:"+[FoodOrderingSystem]* -[*.Tests*]*" `
+            -searchdirs:"$sutDir" `
+            -excludebyattribute:"*.ExcludeFromCodeCoverage*" `
+            -hideskipped:All
+          
           reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
+
 
       - name: Enforce coverage threshold (60%)
         if: github.event_name == 'pull_request'
