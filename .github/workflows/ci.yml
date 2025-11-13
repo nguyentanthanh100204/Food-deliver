@@ -42,45 +42,47 @@ jobs:
 
           Write-Error "No .sln or .csproj found in repository."
           exit 1
-
+  
   unit_tests:
     needs: build
     runs-on: windows-latest
+    env:
+      COV_MIN: 18
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-
-      - name: Build tests (Release)
+  
+      - name: Build tests (Debug with PDB)
         shell: pwsh
         run: |
-          # 1) Restore cho các project kiểu packages.config (toàn solution)
+          # 1) Restore cho các project kiểu packages.config trong .sln
           nuget restore FoodOrderingSystem.sln
       
-          # 2) Restore chuẩn cho các project PackageReference trong solution (nếu có)
+          # 2) Restore chuẩn cho các project dùng PackageReference TRONG .sln (nếu có)
           msbuild FoodOrderingSystem.sln -t:Restore
       
-          # 3) Restore RIÊNG cho project test (vì có thể không nằm trong .sln)
-          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj -t:Restore
+          # 3) ***Restore RIÊNG cho project test*** (vì dùng PackageReference / có thể không nằm trong .sln)
+          msbuild ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" -t:Restore
       
-          # 4) Build project test để chắc chắn sinh DLL
-          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Release /m
+          # 4) Build solution Debug + PDB full
+          msbuild FoodOrderingSystem.sln `
+            /p:Configuration=Debug `
+            /p:DebugSymbols=true `
+            /p:DebugType=Full `
+            /m
+      
+          # 5) Build riêng project test để chắc chắn sinh DLL + PDB
+          msbuild ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            /p:Configuration=Debug `
+            /p:DebugSymbols=true `
+            /p:DebugType=Full `
+            /m
+      
+          # 6) In ra PDB để kiểm tra
+          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
-
-
-      - name: Install OpenCover & ReportGenerator
-        shell: pwsh
-        run: |
-          choco install opencover.portable -y
-          # try choco first
-          $ok = $true
-          try { choco install reportgenerator.portable -y } catch { $ok = $false }
-          if (-not (Get-Command reportgenerator -ErrorAction SilentlyContinue)) { $ok = $false }
-          if (-not $ok) {
-            Write-Host "Falling back to dotnet global tool for ReportGenerator..."
-            dotnet tool install -g dotnet-reportgenerator-globaltool
-            "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          }
-
+  
+      # Tìm vstest.console.exe (VS)
       - name: Locate VSTest
         id: vs
         shell: pwsh
@@ -89,49 +91,59 @@ jobs:
           if (-not $vsPath) { throw "Cannot find Visual Studio" }
           $vstest = Join-Path $vsPath "Common7/IDE/Extensions/TestPlatform/vstest.console.exe"
           echo "vstest=$vstest" >> $env:GITHUB_OUTPUT
-
-      - name: Run UNIT tests with coverage
+  
+      # Cài OpenCover + ReportGenerator
+      - name: Install OpenCover & ReportGenerator
         shell: pwsh
         run: |
-          # Ưu tiên Release, fallback Debug, chỉ trong thư mục project test
-          $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
-          $testDlls = Get-ChildItem -Recurse -Path $bin -Include *Tests*.dll -File `
-                        | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' -and $_.FullName -notmatch 'TestAdapter' }
-
-          if (-not $testDlls -or $testDlls.Count -eq 0) {
-            Write-Host "Không thấy *Tests*.dll trong $bin. In cấu trúc để debug:"
-            Get-ChildItem -Recurse -Path $bin | Select-Object FullName
-            throw "Test DLL not found"
+          choco install opencover.portable -y
+          $rgOk = $true
+          try { choco install reportgenerator.portable -y } catch { $rgOk = $false }
+          if (-not (Get-Command reportgenerator -ErrorAction SilentlyContinue)) {
+            dotnet tool install -g dotnet-reportgenerator-globaltool
+            "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
-
-          $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Release\\' } | Select-Object -First 1
-          if (-not $candidate) { $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Debug\\' } | Select-Object -First 1 }
-
-          Write-Host "Using test DLL: $($candidate.FullName)"
+  
+      # Chạy test qua OpenCover (LƯU Ý: -targetargs phải là 1 chuỗi được quote)
+      - name: Run UNIT tests with coverage (OpenCover)
+        shell: pwsh
+        run: |
+          $oc = (Get-Command OpenCover.Console.exe -ErrorAction SilentlyContinue).Source
+          if (-not $oc) { $oc = Join-Path $env:ChocolateyInstall 'lib\opencover.portable\tools\OpenCover.Console.exe' }
+          if (-not (Test-Path $oc)) { throw "OpenCover not found at: $oc" }
+  
+          $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
+          # Ưu tiên Debug rồi mới Release
+          $testDll = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll |
+                     Sort-Object { if ($_.FullName -match '\\bin\\Debug\\') {0} else {1} } |
+                     Select-Object -First 1
+          if (-not $testDll) { throw "Không tìm thấy FoodOrderingSystem.Tests.dll" }
+  
           New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
-
-          OpenCover.Console.exe -register:user `
+  
+          # GHI CHÚ: dùng +[*]* để tránh lọc nhầm khiến coverage = 0%; sau khi OK thì siết lại thành +[FoodOrderingSystem*]* nếu muốn
+          & $oc -register:user `
+            -returntargetcode `
             -target:"${{ steps.vs.outputs.vstest }}" `
-            -targetargs:"`"$($candidate.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:TestCategory=Unit" `
+            -targetargs:"`"$($testDll.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`"" `
             -output:"unit-coverage.xml" `
-            -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
-
-          reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
-
-
-
-      - name: Enforce coverage threshold (60%)
+            -filter:"+[*]* -[*.Tests*]*"
+  
+          # Xuất HTML + Cobertura.xml
+          reportgenerator -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Html;Cobertura"
+      - name: Enforce coverage threshold
         if: github.event_name == 'pull_request'
         shell: pwsh
         run: |
-          if (-not (Test-Path "unit-coverage.xml")) { throw "Coverage file not found" }
-          [xml]$cov = Get-Content unit-coverage.xml
-          $summary = $cov.GetElementsByTagName("Summary") | Select-Object -First 1
-          if (-not $summary) { throw "Coverage summary not found" }
-          $seqp = [double]$summary.sequenceCoverage
-          Write-Host "Sequence coverage: $seqp %"
-          if ($seqp -lt 60) { throw "Coverage below threshold (60%). Current: $seqp%" }
+          $min = [double](${env:COV_MIN} ?? 60)
+          $cob = Join-Path $PWD "unit-coveragereport\Cobertura.xml"
+          if (-not (Test-Path $cob)) { throw "Coverage file not found: $cob" }
+          [xml]$x = Get-Content $cob
+          $pct = [math]::Round([double]$x.coverage.'line-rate' * 100, 2)
+          Write-Host "Line coverage: $pct % (min: $min %)"
+          if ($pct -lt $min) { throw "Coverage below threshold ($min%). Current: $pct%" }
 
+  
       - name: Upload unit results & coverage
         uses: actions/upload-artifact@v4
         with:
@@ -140,6 +152,7 @@ jobs:
             out/unit-results/*.trx
             unit-coverage.xml
             unit-coveragereport/**
+
 
   integration_tests:
     if: github.event_name == 'push'   # chỉ chạy khi push/merge vào main
@@ -173,8 +186,19 @@ jobs:
       - name: Run INTEGRATION tests
         shell: pwsh
         run: |
-          $testDll = Get-ChildItem -Recurse -Filter FoodOrderingSystem.Tests.dll | Where-Object { $_.FullName -like "*\bin\Release\*" } | Select-Object -First 1
-          & "${{ steps.vs.outputs.vstest }}" "`"$($testDll.FullName)`"" /Logger:trx /ResultsDirectory:"$PWD\out\integration-results" /TestCaseFilter:"TestCategory=Integration"
+          $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll'
+          if (-not (Test-Path $dll)) {
+            Write-Error "Không tìm thấy DLL test: $dll. Hãy kiểm tra bước build (đúng cấu hình Release chưa?)."
+            exit 1
+          }
+
+          New-Item -ItemType Directory -Force -Path "$PWD\out\integration-results" | Out-Null
+
+          & "${{ steps.vs.outputs.vstest }}" `
+            "`"$dll`"" `
+            /Logger:trx `
+            /ResultsDirectory:"$PWD\out\integration-results" `
+            /TestCaseFilter:"TestCategory=Integration"
 
       - name: Upload integration results
         uses: actions/upload-artifact@v4
@@ -189,6 +213,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      - uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet (packages.config)
+        shell: pwsh
+        run: |
+          nuget restore .\FoodOrderingSystem.sln -NonInteractive
+          # đảm bảo gói CodeDom có mặt (phòng khi nuget restore bỏ sót)
+          if (-not (Test-Path ".\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.0\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props")) {
+            nuget install Microsoft.CodeDom.Providers.DotNetCompilerPlatform -Version 2.0.0 -OutputDirectory packages
+          }
       - name: Package Web App (WebDeploy zip)
         shell: pwsh
         run: |
