@@ -50,13 +50,16 @@ jobs:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
 
-      - name: Build tests (Release)
+      - name: Build tests (Debug for coverage)
         shell: pwsh
         run: |
           nuget restore FoodOrderingSystem.sln
           msbuild FoodOrderingSystem.sln -t:Restore
           msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj -t:Restore
-          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Debug /m
+          # ép dùng Windows PDB (không portable)
+          msbuild .\FoodOrderingSystem\FoodOrderingSystem.csproj /p:Configuration=Debug /p:DebugType=full /p:DebugSymbols=true /m
+          msbuild .\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj /p:Configuration=Debug /p:DebugType=full /p:DebugSymbols=true /m
+
 
       - name: Install OpenCover & ReportGenerator
         shell: pwsh
@@ -84,27 +87,32 @@ jobs:
       - name: Run UNIT tests with coverage
         shell: pwsh
         run: |
-      - name: Run UNIT tests with coverage
-        shell: pwsh
-        run: |
           $testDll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll'
           if (-not (Test-Path $testDll)) { throw "Không thấy DLL: $testDll" }
 
-          # thư mục chứa code thực tế (SUT) để OpenCover tra cứu PDB
+          # Thư mục chứa SUT + PDB để OpenCover tìm PDB
           $sutDir = Join-Path $PWD 'FoodOrderingSystem\bin\Debug'
 
           New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
 
+          # Log để chắc chắn VSTest thực sự chạy test
+          Write-Host "=== Listing tests (sanity) ==="
+          & "${{ steps.vs.outputs.vstest }}" "`"$testDll`"" /ListTests
+
           OpenCover.Console.exe -register:user `
             -target:"${{ steps.vs.outputs.vstest }}" `
-            -targetargs:"`"$testDll`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:`"TestCategory=Unit|TestCategory=Smoke`"" `
+            -targetargs:"`"$testDll`" /InIsolation /Platform:x86 /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:`"TestCategory=Unit|TestCategory=Smoke`"" `
             -output:"unit-coverage.xml" `
             -filter:"+[FoodOrderingSystem]* -[*.Tests*]*" `
             -searchdirs:"$sutDir" `
             -excludebyattribute:"*.ExcludeFromCodeCoverage*" `
-            -hideskipped:All
-          
+            -hideskipped:All `
+            -returntargetcode
+
           reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
+
+          # In nhanh tóm tắt OpenCover để debug
+          Select-String -Path unit-coverage.xml -Pattern '<Summary.*>' | ForEach-Object { $_.Line } | Write-Host
 
 
       - name: Enforce coverage threshold (60%)
