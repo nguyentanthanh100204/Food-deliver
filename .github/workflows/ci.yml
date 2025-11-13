@@ -53,7 +53,7 @@ jobs:
       - name: Build tests (Release)
         run: |
           nuget restore
-          msbuild FoodOrderingSystem.sln /p:Configuration=Release
+          msbuild FoodOrderingSystem.Tests/FoodOrderingSystem.Tests.csproj /p:Configuration=Release
 
       - name: Install OpenCover & ReportGenerator
         shell: pwsh
@@ -69,7 +69,6 @@ jobs:
             "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           }
 
-
       - name: Locate VSTest
         id: vs
         shell: pwsh
@@ -82,13 +81,33 @@ jobs:
       - name: Run UNIT tests with coverage
         shell: pwsh
         run: |
-          $testDll = Get-ChildItem -Recurse -Filter FoodOrderingSystem.Tests.dll | Where-Object { $_.FullName -like "*\bin\Release\*" } | Select-Object -First 1
-          if (-not $testDll) { throw "Test DLL not found (Release build)"; }
+          # tìm tất cả DLL test đã build (ưu tiên Release, fallback Debug)
+          $testDlls = Get-ChildItem -Recurse -Include *Tests*.dll -File `
+                      | Where-Object { $_.FullName -match '\\bin\\(Release|Debug)\\' -and $_.FullName -notmatch 'TestAdapter' }
+
+          if (-not $testDlls -or $testDlls.Count -eq 0) {
+            Write-Host "Không tìm thấy *Tests*.dll sau khi build. Liệt kê output để debug:"
+            Get-ChildItem -Recurse -Directory -Filter bin | Select-Object -Expand FullName
+            throw "Test DLL not found"
+          }
+
+          # ưu tiên DLL nằm trong bin\Release; nếu không có thì lấy Debug
+          $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Release\\' } | Select-Object -First 1
+          if (-not $candidate) { $candidate = $testDlls | Where-Object { $_.FullName -match '\\bin\\Debug\\' } | Select-Object -First 1 }
+
+          Write-Host "Using test DLL: $($candidate.FullName)"
+
+          # tạo thư mục kết quả
+          New-Item -ItemType Directory -Force -Path "$PWD\out\unit-results" | Out-Null
+
+          # chạy OpenCover + VSTest (lọc theo category Unit)
           OpenCover.Console.exe -register:user `
             -target:"${{ steps.vs.outputs.vstest }}" `
-            -targetargs:"`"$($testDll.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:TestCategory=Unit" `
+            -targetargs:"`"$($candidate.FullName)`" /Logger:trx /ResultsDirectory:`"$PWD\out\unit-results`" /TestCaseFilter:TestCategory=Unit" `
             -output:"unit-coverage.xml" `
             -filter:"+[FoodOrderingSystem*]* -[*.Tests*]*"
+
+          # tạo báo cáo coverage
           reportgenerator -reports:unit-coverage.xml -targetdir:unit-coveragereport
 
       - name: Enforce coverage threshold (60%)
