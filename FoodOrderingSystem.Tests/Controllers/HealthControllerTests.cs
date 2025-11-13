@@ -18,11 +18,10 @@ namespace FoodOrderingSystem.Tests.Controllers
             var controller = new HealthController();
 
             // Act
-            var result = controller.Index();
-
-            // Assert
-            Assert.IsNotNull(result);
+            var result = controller.Index() as ContentResult;
+            Assert.IsNotNull(result, "Index() phải trả về ContentResult");
             Assert.AreEqual("OK", result.Content);
+
         }
     }
 }
