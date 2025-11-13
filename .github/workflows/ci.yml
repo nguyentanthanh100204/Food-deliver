@@ -51,9 +51,15 @@ jobs:
       - uses: microsoft/setup-msbuild@v2
 
       - name: Build tests (Release)
+        shell: pwsh
         run: |
-          nuget restore
-          msbuild FoodOrderingSystem.Tests/FoodOrderingSystem.Tests.csproj /p:Configuration=Release
+          # Restore cho projects kiểu packages.config (nếu có)
+          nuget restore FoodOrderingSystem.sln
+          # Restore cho projects dùng PackageReference (SDK-style)
+          msbuild FoodOrderingSystem.sln -t:Restore
+          # Build Release toàn solution (đảm bảo sinh ra DLL test)
+          msbuild FoodOrderingSystem.sln /p:Configuration=Release /m
+
 
       - name: Install OpenCover & ReportGenerator
         shell: pwsh
