@@ -213,6 +213,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      - uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet (packages.config)
+        shell: pwsh
+        run: |
+          nuget restore .\FoodOrderingSystem.sln -NonInteractive
+          # đảm bảo gói CodeDom có mặt (phòng khi nuget restore bỏ sót)
+          if (-not (Test-Path ".\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.0\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props")) {
+            nuget install Microsoft.CodeDom.Providers.DotNetCompilerPlatform -Version 2.0.0 -OutputDirectory packages
+          }
       - name: Package Web App (WebDeploy zip)
         shell: pwsh
         run: |
