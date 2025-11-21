@@ -169,6 +169,13 @@ jobs:
             out/unit-results/*.trx
             unit-coverage.xml
             unit-coveragereport/**
+      - name: Unit Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Tests
+          path: out/unit-results/*.trx
+          reporter: dotnet-trx
 
 
   integration_tests:
@@ -264,6 +271,13 @@ jobs:
         with:
           name: integration-results
           path: out/integration-results/*.trx
+      - name: Integration Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Integration Tests
+          path: out/integration-results/*.trx
+          reporter: dotnet-trx
 
 
   package:
