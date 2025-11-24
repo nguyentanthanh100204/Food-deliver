@@ -179,52 +179,63 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          # Lấy tất cả file .trx do VSTest tạo ra
           $trxFiles = Get-ChildItem -Recurse "out/unit-results" -Filter *.trx
+      
           if (-not $trxFiles) {
-            "### Unit tests`nKhông tìm thấy file .trx trong out/unit-results" `
-              | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "## unit_tests summary" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            ""                     | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "Không tìm thấy file .trx trong thư mục out/unit-results" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             exit 0
           }
-
+      
           $totalPassed  = 0
           $totalFailed  = 0
           $totalSkipped = 0
           $failedList   = @()
-
-          foreach ($f in $trxFiles) {
-            [xml]$xml = Get-Content $f.FullName
-            $counters = $xml.TestRun.ResultSummary.Counters
-            $totalPassed  += [int]$counters.passed
-            $totalFailed  += [int]$counters.failed
-            $totalSkipped += [int]$counters.notExecuted
-
-            $xml.TestRun.Results.UnitTestResult `
-              | Where-Object { $_.outcome -ne 'Passed' } `
-              | ForEach-Object {
-                  $failedList += "{0} ({1})" -f $_.testName, $_.outcome
-                }
+      
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file
+      
+            # TRX chuẩn: TestRun -> Results -> UnitTestResult
+            $results = $xml.TestRun.Results.UnitTestResult
+      
+            $totalPassed  += ($results | Where-Object outcome -eq 'Passed').Count
+            $totalFailed  += ($results | Where-Object outcome -eq 'Failed').Count
+            $totalSkipped += ($results | Where-Object outcome -eq 'NotExecuted').Count
+      
+            $failedNames = $results |
+                           Where-Object outcome -eq 'Failed' |
+                           Select-Object -ExpandProperty testName
+      
+            $failedList += $failedNames
           }
-
+      
           $total = $totalPassed + $totalFailed + $totalSkipped
-
-          $lines = @()
-          $lines += "### Unit tests"
-          $lines += ""
-          $lines += "| Total | Passed | Failed | Skipped |"
-          $lines += "| ----- | ------ | ------ | ------- |"
-          $lines += "| $total | $totalPassed | $totalFailed | $totalSkipped |"
-
-          if ($failedList.Count -gt 0) {
-            $lines += ""
-            $lines += "#### Failed unit tests"
-            $failedList | ForEach-Object { $lines += "- $_" }
+      
+          "## unit_tests summary" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          ""                     | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+          @"
+          Unit tests
+          |        | Total | Passed | Failed | Skipped |
+          |--------|------:|------:|------:|--------:|
+          | Count  | $total | $totalPassed | $totalFailed | $totalSkipped |
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+          if ($totalFailed -gt 0 -and $failedList.Count -gt 0) {
+            "Failed unit tests" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+            foreach ($name in $failedList | Sort-Object -Unique) {
+              "- $name" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            }
+          } else {
+            "Failed unit tests: (none)" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
-          else {
-            $lines += ""
-            $lines += "✅ All unit tests passed"
-          }
-
-          $lines -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
 
 
   integration_tests:
@@ -325,51 +336,59 @@ jobs:
         shell: pwsh
         run: |
           $trxFiles = Get-ChildItem -Recurse "out/integration-results" -Filter *.trx
+      
           if (-not $trxFiles) {
-            "### Integration tests`nKhông tìm thấy file .trx trong out/integration-results" `
-              | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "## integration_tests summary" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            ""                            | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            "Không tìm thấy file .trx trong thư mục out/integration-results" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             exit 0
           }
-
+      
           $totalPassed  = 0
           $totalFailed  = 0
           $totalSkipped = 0
           $failedList   = @()
-
-          foreach ($f in $trxFiles) {
-            [xml]$xml = Get-Content $f.FullName
-            $counters = $xml.TestRun.ResultSummary.Counters
-            $totalPassed  += [int]$counters.passed
-            $totalFailed  += [int]$counters.failed
-            $totalSkipped += [int]$counters.notExecuted
-
-            $xml.TestRun.Results.UnitTestResult `
-              | Where-Object { $_.outcome -ne 'Passed' } `
-              | ForEach-Object {
-                  $failedList += "{0} ({1})" -f $_.testName, $_.outcome
-                }
+      
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file
+            $results = $xml.TestRun.Results.UnitTestResult
+      
+            $totalPassed  += ($results | Where-Object outcome -eq 'Passed').Count
+            $totalFailed  += ($results | Where-Object outcome -eq 'Failed').Count
+            $totalSkipped += ($results | Where-Object outcome -eq 'NotExecuted').Count
+      
+            $failedNames = $results |
+                           Where-Object outcome -eq 'Failed' |
+                           Select-Object -ExpandProperty testName
+      
+            $failedList += $failedNames
           }
-
+      
           $total = $totalPassed + $totalFailed + $totalSkipped
-
-          $lines = @()
-          $lines += "### Integration tests"
-          $lines += ""
-          $lines += "| Total | Passed | Failed | Skipped |"
-          $lines += "| ----- | ------ | ------ | ------- |"
-          $lines += "| $total | $totalPassed | $totalFailed | $totalSkipped |"
-
-          if ($failedList.Count -gt 0) {
-            $lines += ""
-            $lines += "#### Failed integration tests"
-            $failedList | ForEach-Object { $lines += "- $_" }
+      
+          "## integration_tests summary" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          ""                             | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+          @"
+          Integration tests
+          |        | Total | Passed | Failed | Skipped |
+          |--------|------:|------:|------:|--------:|
+          | Count  | $total | $totalPassed | $totalFailed | $totalSkipped |
+          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+          if ($totalFailed -gt 0 -and $failedList.Count -gt 0) {
+            "Failed integration tests" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+      
+            foreach ($name in $failedList | Sort-Object -Unique) {
+              "- $name" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            }
+          } else {
+            "Failed integration tests: (none)" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
           }
-          else {
-            $lines += ""
-            $lines += "✅ All integration tests passed"
-          }
 
-          $lines -join "`n" | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
 
   package:
