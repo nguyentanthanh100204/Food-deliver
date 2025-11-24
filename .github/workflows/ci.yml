@@ -180,36 +180,65 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $trxFiles = Get-ChildItem -Recurse "out/unit-results" -Filter *.trx -ErrorAction SilentlyContinue
-          if (-not $trxFiles) {
-            "## Unit tests`nKhông tìm thấy file .trx trong out/unit-results" |
+          $dir = Join-Path $PWD 'out/unit-results'
+          if (-not (Test-Path $dir)) {
+            "### Unit tests`nKhông tìm thấy thư mục kết quả: `$dir`n" |
               Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             exit 0
           }
 
-          $total   = 0
-          $passed  = 0
-          $failed  = 0
+          $trxFiles = Get-ChildItem -Recurse -Path $dir -Filter *.trx -ErrorAction SilentlyContinue
+          if (-not $trxFiles) {
+            "### Unit tests`nKhông tìm thấy file `.trx` trong $dir`n" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            exit 0
+          }
+
+          $total = 0
+          $passed = 0
+          $failed = 0
           $skipped = 0
+          $failedNames = @()
 
           foreach ($file in $trxFiles) {
-            [xml]$doc = Get-Content $file.FullName
-            $counters = $doc.TestRun.ResultSummary.Counters
-            if ($null -ne $counters) {
-              $total   += [int]$counters.total
-              $passed  += [int]$counters.passed
-              $failed  += [int]$counters.failed
-              $skipped += [int]$counters.notExecuted
+            try {
+              [xml]$xml = Get-Content $file.FullName
+            } catch {
+              Write-Host "Không đọc được file TRX: $($file.FullName)"
+              continue
+            }
+
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($r in $results) {
+              $total++
+              switch ($r.outcome) {
+                'Passed'      { $passed++ }
+                'Failed'      { $failed++; $failedNames += $r.testName }
+                'NotExecuted' { $skipped++ }
+                default       { }
+              }
             }
           }
 
-          @"
-          ## Unit tests
+          $sb = [System.Text.StringBuilder]::new()
+          $null = $sb.AppendLine("### Unit tests")
+          $null = $sb.AppendLine()
+          $null = $sb.AppendLine("| Total | Passed | Failed | Skipped |")
+          $null = $sb.AppendLine("| ----- | ------ | ------ | ------- |")
+          $null = $sb.AppendLine("| $total | $passed | $failed | $skipped |")
 
-          | Total | Passed | Failed | Skipped |
-          |------:|------:|------:|--------:|
-          | $total | $passed | $failed | $skipped |
-          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if ($failedNames.Count -gt 0) {
+            $null = $sb.AppendLine()
+            $null = $sb.AppendLine("**Failed unit tests:**")
+            foreach ($name in ($failedNames | Sort-Object -Unique)) {
+              $null = $sb.AppendLine("- $name")
+            }
+          } else {
+            $null = $sb.AppendLine()
+            $null = $sb.AppendLine("Failed unit tests: (none)")
+          }
+
+          $sb.ToString() | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
 
 
@@ -311,37 +340,65 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $trxFiles = Get-ChildItem -Recurse "out/integration-results" -Filter *.trx -ErrorAction SilentlyContinue
-          if (-not $trxFiles) {
-            "## Integration tests`nKhông tìm thấy file .trx trong out/integration-results" |
+          $dir = Join-Path $PWD 'out/integration-results'
+          if (-not (Test-Path $dir)) {
+            "### Integration tests`nKhông tìm thấy thư mục kết quả: `$dir`n" |
               Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             exit 0
           }
 
-          $total   = 0
-          $passed  = 0
-          $failed  =  0
+          $trxFiles = Get-ChildItem -Recurse -Path $dir -Filter *.trx -ErrorAction SilentlyContinue
+          if (-not $trxFiles) {
+            "### Integration tests`nKhông tìm thấy file `.trx` trong $dir`n" |
+              Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            exit 0
+          }
+
+          $total = 0
+          $passed = 0
+          $failed = 0
           $skipped = 0
+          $failedNames = @()
 
           foreach ($file in $trxFiles) {
-            [xml]$doc = Get-Content $file.FullName
-            $counters = $doc.TestRun.ResultSummary.Counters
-            if ($null -ne $counters) {
-              $total   += [int]$counters.total
-              $passed  += [int]$counters.passed
-              $failed  += [int]$counters.failed
-              $skipped += [int]$counters.notExecuted
+            try {
+              [xml]$xml = Get-Content $file.FullName
+            } catch {
+              Write-Host "Không đọc được file TRX: $($file.FullName)"
+              continue
+            }
+
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($r in $results) {
+              $total++
+              switch ($r.outcome) {
+                'Passed'      { $passed++ }
+                'Failed'      { $failed++; $failedNames += $r.testName }
+                'NotExecuted' { $skipped++ }
+                default       { }
+              }
             }
           }
 
-          @"
-          ## Integration tests
+          $sb = [System.Text.StringBuilder]::new()
+          $null = $sb.AppendLine("### Integration tests")
+          $null = $sb.AppendLine()
+          $null = $sb.AppendLine("| Total | Passed | Failed | Skipped |")
+          $null = $sb.AppendLine("| ----- | ------ | ------ | ------- |")
+          $null = $sb.AppendLine("| $total | $passed | $failed | $skipped |")
 
-          | Total | Passed | Failed | Skipped |
-          |------:|------:|------:|--------:|
-          | $total | $passed | $failed | $skipped |
-          "@ | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          if ($failedNames.Count -gt 0) {
+            $null = $sb.AppendLine()
+            $null = $sb.AppendLine("**Failed integration tests:**")
+            foreach ($name in ($failedNames | Sort-Object -Unique)) {
+              $null = $sb.AppendLine("- $name")
+            }
+          } else {
+            $null = $sb.AppendLine()
+            $null = $sb.AppendLine("Failed integration tests: (none)")
+          }
 
+          $sb.ToString() | Out-File $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
 
 
   package:
