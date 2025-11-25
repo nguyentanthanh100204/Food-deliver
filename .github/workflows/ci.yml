@@ -202,7 +202,18 @@ jobs:
 
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
-            $results = $xml.TestRun.Results.UnitTestResult
+
+            # Lấy namespace (TRX thường có xmlns mặc định)
+            $nsMgr = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $root  = $xml.DocumentElement
+            if ($root -and $root.NamespaceURI) {
+              $nsMgr.AddNamespace('t', $root.NamespaceURI)
+              $results = $xml.SelectNodes('//t:UnitTestResult', $nsMgr)
+            }
+            else {
+              $results = $xml.SelectNodes('//UnitTestResult')
+            }
+
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
@@ -218,8 +229,8 @@ jobs:
           Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
           Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
           Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
-
           Add-Content $summaryFile ""
+
           if ($failed -gt 0) {
             Add-Content $summaryFile "Failed unit tests:"
             foreach ($name in $failedNames) {
@@ -229,7 +240,6 @@ jobs:
           else {
             Add-Content $summaryFile "Failed unit tests: (none)"
           }
-
 
 
 
@@ -353,7 +363,17 @@ jobs:
 
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
-            $results = $xml.TestRun.Results.UnitTestResult
+
+            $nsMgr = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $root  = $xml.DocumentElement
+            if ($root -and $root.NamespaceURI) {
+              $nsMgr.AddNamespace('t', $root.NamespaceURI)
+              $results = $xml.SelectNodes('//t:UnitTestResult', $nsMgr)
+            }
+            else {
+              $results = $xml.SelectNodes('//UnitTestResult')
+            }
+
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
@@ -369,8 +389,8 @@ jobs:
           Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
           Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
           Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
-
           Add-Content $summaryFile ""
+
           if ($failed -gt 0) {
             Add-Content $summaryFile "Failed integration tests:"
             foreach ($name in $failedNames) {
@@ -380,7 +400,7 @@ jobs:
           else {
             Add-Content $summaryFile "Failed integration tests: (none)"
           }
-   
+
 
 
 
