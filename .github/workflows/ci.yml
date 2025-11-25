@@ -181,60 +181,62 @@ jobs:
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-          $trxDir      = Join-Path $PWD "out/unit-results"
-
-          Write-Host "Looking for UNIT test .trx in $trxDir"
+          $trxDir      = "out/unit-results"
 
           if (-not (Test-Path $trxDir)) {
-            "Unit tests: folder '$trxDir' not found." | Out-File -FilePath $summaryFile -Encoding utf8 -Append
+            "Unit tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8
             exit 0
           }
 
           $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
           if (-not $trxFiles) {
-            "Unit tests: no .trx files found in '$trxDir'." | Out-File -FilePath $summaryFile -Encoding utf8 -Append
+            "Unit tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8
             exit 0
           }
 
-          $total      = 0
-          $passed     = 0
-          $failed     = 0
-          $skipped    = 0
-          $failedList = @()
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
+          $skipped = 0
+          $failedNames = @()
 
           foreach ($file in $trxFiles) {
-            Write-Host "Parsing $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
 
-            # lấy tất cả node UnitTestResult ở bất kỳ đâu trong file
-            $results = $xml.SelectNodes("//UnitTestResult")
+            # Lấy namespace mặc định trong file TRX
+            $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $ns.AddNamespace("t", $xml.DocumentElement.NamespaceURI)
+
+            # Lấy tất cả node UnitTestResult
+            $results = $xml.SelectNodes("//t:UnitTestResult", $ns)
 
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
                 "Passed"      { $passed++ }
-                "Failed"      { $failed++;  $failedList += $r.testName }
+                "Failed"      { $failed++;  $failedNames += $r.testName }
                 "NotExecuted" { $skipped++ }
               }
             }
           }
 
-          Add-Content -Path $summaryFile -Value "## Unit tests"
-          Add-Content -Path $summaryFile -Value ""
-          Add-Content -Path $summaryFile -Value "| Total | Passed | Failed | Skipped |"
-          Add-Content -Path $summaryFile -Value "|------:|-------:|-------:|--------:|"
-          Add-Content -Path $summaryFile -Value "| $total | $passed | $failed | $skipped |"
-          Add-Content -Path $summaryFile -Value ""
+          Add-Content $summaryFile "## Unit tests"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
+          Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
+          Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
 
+          Add-Content $summaryFile ""
           if ($failed -gt 0) {
-            Add-Content -Path $summaryFile -Value "Failed unit tests:"
-            foreach ($name in $failedList) {
-              Add-Content -Path $summaryFile -Value "* $name"
+            Add-Content $summaryFile "Failed unit tests:"
+            foreach ($name in $failedNames) {
+              Add-Content $summaryFile "* $name"
             }
           }
           else {
-            Add-Content -Path $summaryFile -Value "Failed unit tests: (none)"
+            Add-Content $summaryFile "Failed unit tests: (none)"
           }
+
 
 
   integration_tests:
@@ -337,57 +339,59 @@ jobs:
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-          $trxDir      = Join-Path $PWD "out/integration-results"
-
-          Write-Host "Looking for INTEGRATION test .trx in $trxDir"
+          $trxDir      = "out/integration-results"
 
           if (-not (Test-Path $trxDir)) {
-            "Integration tests: folder '$trxDir' not found." | Out-File -FilePath $summaryFile -Encoding utf8 -Append
+            "Integration tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8 -Append
             exit 0
           }
 
           $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
           if (-not $trxFiles) {
-            "Integration tests: no .trx files found in '$trxDir'." | Out-File -FilePath $summaryFile -Encoding utf8 -Append
+            "Integration tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8 -Append
             exit 0
           }
 
-          $total      = 0
-          $passed     = 0
-          $failed     = 0
-          $skipped    = 0
-          $failedList = @()
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
+          $skipped = 0
+          $failedNames = @()
 
           foreach ($file in $trxFiles) {
-            Write-Host "Parsing $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
-            $results = $xml.SelectNodes("//UnitTestResult")
+
+            # Namespace trong TRX
+            $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
+            $ns.AddNamespace("t", $xml.DocumentElement.NamespaceURI)
+
+            $results = $xml.SelectNodes("//t:UnitTestResult", $ns)
 
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
                 "Passed"      { $passed++ }
-                "Failed"      { $failed++;  $failedList += $r.testName }
+                "Failed"      { $failed++;  $failedNames += $r.testName }
                 "NotExecuted" { $skipped++ }
               }
             }
           }
 
-          Add-Content -Path $summaryFile -Value "## Integration tests"
-          Add-Content -Path $summaryFile -Value ""
-          Add-Content -Path $summaryFile -Value "| Total | Passed | Failed | Skipped |"
-          Add-Content -Path $summaryFile -Value "|------:|-------:|-------:|--------:|"
-          Add-Content -Path $summaryFile -Value "| $total | $passed | $failed | $skipped |"
-          Add-Content -Path $summaryFile -Value ""
+          Add-Content $summaryFile "## Integration tests"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
+          Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
+          Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
 
+          Add-Content $summaryFile ""
           if ($failed -gt 0) {
-            Add-Content -Path $summaryFile -Value "Failed integration tests:"
-            foreach ($name in $failedList) {
-              Add-Content -Path $summaryFile -Value "* $name"
+            Add-Content $summaryFile "Failed integration tests:"
+            foreach ($name in $failedNames) {
+              Add-Content $summaryFile "* $name"
             }
           }
           else {
-            Add-Content -Path $summaryFile -Value "Failed integration tests: (none)"
+            Add-Content $summaryFile "Failed integration tests: (none)"
           }
 
 
