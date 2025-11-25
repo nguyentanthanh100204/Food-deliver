@@ -175,56 +175,60 @@ jobs:
             out/unit-results/*.trx
             unit-coverage.xml
             unit-coveragereport/**
-
+    
       - name: Summarize UNIT tests (to job summary)
         if: always()
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-    
-          # Lấy các file .trx do bước VSTest tạo ra
-          $trxFiles = Get-ChildItem -Recurse "out/unit-results" -Filter *.trx -ErrorAction SilentlyContinue
-    
-          if (-not $trxFiles) {
-            "## Unit tests`nKhông tìm thấy file .trx trong $(Get-Location)\out\unit-results" |
-              Out-File $summaryFile -Encoding utf8 -Append
+          $trxDir      = "out/unit-results"
+
+          if (-not (Test-Path $trxDir)) {
+            "Unit tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8
             exit 0
           }
-    
-          $total  = 0
-          $passed = 0
-          $failed = 0
+
+          $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
+          if (-not $trxFiles) {
+            "Unit tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8
+            exit 0
+          }
+
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
           $skipped = 0
           $failedNames = @()
-    
+
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
-    
-            foreach ($r in $xml.TestRun.Results.UnitTestResult) {
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($r in $results) {
               $total++
-    
               switch ($r.outcome) {
                 "Passed"      { $passed++ }
-                "Failed"      { $failed++;   $failedNames += $r.testName }
+                "Failed"      { $failed++;  $failedNames += $r.testName }
                 "NotExecuted" { $skipped++ }
               }
             }
           }
-    
-                @"
-          ## Unit tests
-          
-          | Total | Passed | Failed | Skipped |
-          |------:|-------:|-------:|--------:|
-          | $total | $passed | $failed | $skipped |
-          
-          $( if ($failedNames.Count -gt 0) {
-          "### Failed unit tests
-          " + ($failedNames | ForEach-Object { "- $_" } | Out-String)
-          } else {
-          "Failed unit tests: (none)"
-          } )
-          "@ | Out-File $summaryFile -Encoding utf8 -Append
+
+          Add-Content $summaryFile "## Unit tests"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
+          Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
+          Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
+
+          Add-Content $summaryFile ""
+          if ($failed -gt 0) {
+            Add-Content $summaryFile "Failed unit tests:"
+            foreach ($name in $failedNames) {
+              Add-Content $summaryFile "* $name"
+            }
+          }
+          else {
+            Add-Content $summaryFile "Failed unit tests: (none)"
+          }
 
 
 
@@ -328,50 +332,55 @@ jobs:
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-    
-          $trxFiles = Get-ChildItem -Recurse "out/integration-results" -Filter *.trx -ErrorAction SilentlyContinue
-    
-          if (-not $trxFiles) {
-            "## Integration tests`nKhông tìm thấy file .trx trong $(Get-Location)\out\integration-results" |
-              Out-File $summaryFile -Encoding utf8 -Append
+          $trxDir      = "out/integration-results"
+
+          if (-not (Test-Path $trxDir)) {
+            "Integration tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8 -Append
             exit 0
           }
-    
-          $total  = 0
-          $passed = 0
-          $failed = 0
+
+          $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
+          if (-not $trxFiles) {
+            "Integration tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8 -Append
+            exit 0
+          }
+
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
           $skipped = 0
           $failedNames = @()
-    
+
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
-    
-            foreach ($r in $xml.TestRun.Results.UnitTestResult) {
+            $results = $xml.TestRun.Results.UnitTestResult
+            foreach ($r in $results) {
               $total++
-    
               switch ($r.outcome) {
                 "Passed"      { $passed++ }
-                "Failed"      { $failed++;   $failedNames += $r.testName }
+                "Failed"      { $failed++;  $failedNames += $r.testName }
                 "NotExecuted" { $skipped++ }
               }
             }
           }
-    
-                  @"
-            ## Integration tests
-            
-            | Total | Passed | Failed | Skipped |
-            |------:|-------:|-------:|--------:|
-            | $total | $passed | $failed | $skipped |
-            
-            $( if ($failedNames.Count -gt 0) {
-            "### Failed integration tests
-            " + ($failedNames | ForEach-Object { "- $_" } | Out-String)
-            } else {
-            "Failed integration tests: (none)"
-            } )
-            "@ | Out-File $summaryFile -Encoding utf8 -Append
-            
+
+          Add-Content $summaryFile "## Integration tests"
+          Add-Content $summaryFile ""
+          Add-Content $summaryFile "| Total | Passed | Failed | Skipped |"
+          Add-Content $summaryFile "|------:|-------:|-------:|--------:|"
+          Add-Content $summaryFile "| $total | $passed | $failed | $skipped |"
+
+          Add-Content $summaryFile ""
+          if ($failed -gt 0) {
+            Add-Content $summaryFile "Failed integration tests:"
+            foreach ($name in $failedNames) {
+              Add-Content $summaryFile "* $name"
+            }
+          }
+          else {
+            Add-Content $summaryFile "Failed integration tests: (none)"
+          }
+   
 
 
 
