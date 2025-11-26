@@ -201,11 +201,17 @@ jobs:
           $failedNames = @()
 
           foreach ($file in $trxFiles) {
+            Write-Host "Parsing UNIT trx: $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
 
-            # Lấy mọi node UnitTestResult, bỏ qua namespace
-            $results = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
-            if (-not $results) { continue }
+            # Thử đủ kiểu node tên khác nhau
+            $results = @()
+            $nodes1 = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
+            if ($nodes1) { $results += $nodes1 }
+            $nodes2 = $xml.SelectNodes("//*[local-name()='TestResult']")
+            if ($nodes2) { $results += $nodes2 }
+
+            Write-Host "  -> Found $($results.Count) result nodes"
 
             foreach ($r in $results) {
               $total++
@@ -233,6 +239,7 @@ jobs:
           else {
             "Failed unit tests: (none)"                        | Out-File $summaryFile -Encoding utf8 -Append
           }
+
 
 
 
@@ -356,11 +363,17 @@ jobs:
           $failedNames = @()
 
           foreach ($file in $trxFiles) {
+            Write-Host "Parsing INTEGRATION trx: $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
 
-            # Bỏ qua namespace giống trên
-            $results = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
-            if (-not $results) { continue }
+            # Thử đủ kiểu node tên khác nhau
+            $results = @()
+            $nodes1 = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
+            if ($nodes1) { $results += $nodes1 }
+            $nodes2 = $xml.SelectNodes("//*[local-name()='TestResult']")
+            if ($nodes2) { $results += $nodes2 }
+
+            Write-Host "  -> Found $($results.Count) result nodes"
 
             foreach ($r in $results) {
               $total++
@@ -388,8 +401,6 @@ jobs:
           else {
             "Failed integration tests: (none)"                 | Out-File $summaryFile -Encoding utf8 -Append
           }
-
-
 
 
 
