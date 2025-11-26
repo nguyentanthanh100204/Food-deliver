@@ -178,27 +178,39 @@ jobs:
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-          $resultsDir  = Join-Path $PWD 'out\unit-results'
-          $logPath     = Join-Path $resultsDir 'vstest.log'
+          $trxDir      = Join-Path $PWD 'out\unit-results'
 
-          if (-not (Test-Path $logPath)) {
-            "Unit tests: log file '$logPath' not found." | Out-File $summaryFile -Encoding utf8
+          if (-not (Test-Path $trxDir)) {
+            "Unit tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8
             exit 0
           }
 
-          $text  = Get-Content $logPath -Raw
-          $regex = 'Total tests:\s*(\d+).*?Passed:\s*(\d+).*?Failed:\s*(\d+).*?Skipped:\s*(\d+)'
-          $m     = [regex]::Match($text, $regex, 'Singleline')
-
-          if (-not $m.Success) {
-            "Unit tests: could not parse counts from vstest.log." | Out-File $summaryFile -Encoding utf8
+          $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
+          if (-not $trxFiles) {
+            "Unit tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8
             exit 0
           }
 
-          $total   = [int]$m.Groups[1].Value
-          $passed  = [int]$m.Groups[2].Value
-          $failed  = [int]$m.Groups[3].Value
-          $skipped = [int]$m.Groups[4].Value
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
+          $skipped = 0
+
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+
+            # Tìm mọi node <Counters ...> bất kể namespace
+            $countersNodes = Select-Xml -Xml $xml -XPath '//*[local-name()="Counters"]'
+
+            foreach ($node in $countersNodes) {
+              $c = $node.Node
+
+              if ($c.total)       { $total   += [int]$c.total }
+              if ($c.passed)      { $passed  += [int]$c.passed }
+              if ($c.failed)      { $failed  += [int]$c.failed }
+              if ($c.notExecuted) { $skipped += [int]$c.notExecuted }
+            }
+          }
 
           "## Unit tests"                             | Out-File $summaryFile -Encoding utf8
           ""                                          | Out-File $summaryFile -Encoding utf8 -Append
@@ -208,7 +220,7 @@ jobs:
 
           ""                                          | Out-File $summaryFile -Encoding utf8 -Append
           if ($failed -gt 0) {
-            "⚠️ Có $failed unit test bị FAIL – xem chi tiết trong log / file .trx." |
+            "⚠️ Có $failed unit test bị FAIL – xem chi tiết trong file .trx (artifact 'unit-results-and-coverage')." |
               Out-File $summaryFile -Encoding utf8 -Append
           }
           else {
@@ -319,28 +331,38 @@ jobs:
         shell: pwsh
         run: |
           $summaryFile = $env:GITHUB_STEP_SUMMARY
-          $resultsDir  = Join-Path $PWD 'out\integration-results'
-          $logPath     = Join-Path $resultsDir 'vstest.log'
+          $trxDir      = Join-Path $PWD 'out\integration-results'
 
-          if (-not (Test-Path $logPath)) {
-            "Integration tests: log file '$logPath' not found." | Out-File $summaryFile -Encoding utf8 -Append
+          if (-not (Test-Path $trxDir)) {
+            "Integration tests: folder '$trxDir' not found." | Out-File $summaryFile -Encoding utf8 -Append
             exit 0
           }
 
-          $text  = Get-Content $logPath -Raw
-          $regex = 'Total tests:\s*(\d+).*?Passed:\s*(\d+).*?Failed:\s*(\d+).*?Skipped:\s*(\d+)'
-          $m     = [regex]::Match($text, $regex, 'Singleline')
-
-          if (-not $m.Success) {
-            "Integration tests: could not parse counts from vstest.log." |
-              Out-File $summaryFile -Encoding utf8 -Append
+          $trxFiles = Get-ChildItem -Path $trxDir -Filter *.trx -Recurse
+          if (-not $trxFiles) {
+            "Integration tests: no .trx files found in '$trxDir'." | Out-File $summaryFile -Encoding utf8 -Append
             exit 0
           }
 
-          $total   = [int]$m.Groups[1].Value
-          $passed  = [int]$m.Groups[2].Value
-          $failed  = [int]$m.Groups[3].Value
-          $skipped = [int]$m.Groups[4].Value
+          $total   = 0
+          $passed  = 0
+          $failed  = 0
+          $skipped = 0
+
+          foreach ($file in $trxFiles) {
+            [xml]$xml = Get-Content $file.FullName
+
+            $countersNodes = Select-Xml -Xml $xml -XPath '//*[local-name()="Counters"]'
+
+            foreach ($node in $countersNodes) {
+              $c = $node.Node
+
+              if ($c.total)       { $total   += [int]$c.total }
+              if ($c.passed)      { $passed  += [int]$c.passed }
+              if ($c.failed)      { $failed  += [int]$c.failed }
+              if ($c.notExecuted) { $skipped += [int]$c.notExecuted }
+            }
+          }
 
           "## Integration tests"                        | Out-File $summaryFile -Encoding utf8 -Append
           ""                                           | Out-File $summaryFile -Encoding utf8 -Append
@@ -350,13 +372,14 @@ jobs:
 
           ""                                           | Out-File $summaryFile -Encoding utf8 -Append
           if ($failed -gt 0) {
-            "⚠️ Có $failed integration test bị FAIL – xem chi tiết trong log / file .trx." |
+            "⚠️ Có $failed integration test bị FAIL – xem chi tiết trong file .trx (artifact 'integration-results')." |
               Out-File $summaryFile -Encoding utf8 -Append
           }
           else {
             "✅ Tất cả integration tests đều PASS." |
               Out-File $summaryFile -Encoding utf8 -Append
           }
+
 
 
 
