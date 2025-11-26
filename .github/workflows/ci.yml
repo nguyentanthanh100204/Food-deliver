@@ -204,21 +204,60 @@ jobs:
             Write-Host "Parsing UNIT trx: $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
 
-            # Thử đủ kiểu node tên khác nhau
-            $results = @()
-            $nodes1 = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
-            if ($nodes1) { $results += $nodes1 }
-            $nodes2 = $xml.SelectNodes("//*[local-name()='TestResult']")
-            if ($nodes2) { $results += $nodes2 }
+            # 1) Ưu tiên dùng ResultSummary/Counters nếu có
+            $counters = $xml.SelectSingleNode("//*[local-name()='ResultSummary']/*[local-name()='Counters']")
+            if ($counters) {
+              Write-Host "  -> Using ResultSummary Counters"
+              $total   += [int]($counters.total)
+              $passed  += [int]($counters.passed)
+              # failed = failed + error + timeout
+              $failed  += [int]($counters.failed) + [int]($counters.error) + [int]($counters.timeout)
+              # skipped = notExecuted + inconclusive + notRunnable (tùy framework)
+              $skipped += [int]($counters.notExecuted) + [int]($counters.inconclusive) + [int]($counters.notRunnable)
+            }
 
-            Write-Host "  -> Found $($results.Count) result nodes"
+            # 2) Dò thêm từng node có outcome để lấy tên test fail
+            $nodes = $xml.SelectNodes("//*[ @outcome ]")
+            Write-Host "  -> Found $($nodes.Count) nodes with 'outcome' attribute"
 
-            foreach ($r in $results) {
-              $total++
-              switch ($r.outcome) {
-                'Passed'      { $passed++ }
-                'Failed'      { $failed++;  $failedNames += $r.testName }
-                'NotExecuted' { $skipped++ }
+            foreach ($n in $nodes) {
+              $oc = "$($n.outcome)".ToLowerInvariant()
+
+              if ($oc -eq 'failed' -or $oc -eq 'error' -or $oc -eq 'timeout') {
+                # Lấy tên test
+                $name = $null
+                if ($n.Attributes['testName']) { $name = $n.Attributes['testName'].Value }
+                elseif ($n.Attributes['name']) { $name = $n.Attributes['name'].Value }
+                elseif ($n.Attributes['fullName']) { $name = $n.Attributes['fullName'].Value }
+                else { $name = $n.Name }
+
+                if ($name -and -not ($failedNames -contains $name)) {
+                  $failedNames += $name
+                }
+              }
+            }
+          }
+
+          # Nếu Counters không cho ra tổng (vẫn 0) thì fallback: đếm từ các node
+          if ($total -eq 0 -and $trxFiles.Count -gt 0) {
+            Write-Host "Counters not found or 0, recomputing totals from nodes..."
+            $total   = 0
+            $passed  = 0
+            $failed  = 0
+            $skipped = 0
+
+            foreach ($file in $trxFiles) {
+              [xml]$xml = Get-Content $file.FullName
+              $nodes = $xml.SelectNodes("//*[ @outcome ]")
+              foreach ($n in $nodes) {
+                $oc = "$($n.outcome)".ToLowerInvariant()
+                switch ($oc) {
+                  'passed'      { $passed++;  $total++ }
+                  'failed'      { $failed++;  $total++ }
+                  'error'       { $failed++;  $total++ }
+                  'timeout'     { $failed++;  $total++ }
+                  'notexecuted' { $skipped++; $total++ }
+                }
               }
             }
           }
@@ -230,7 +269,7 @@ jobs:
           "| $total | $passed | $failed | $skipped |"          | Out-File $summaryFile -Encoding utf8 -Append
           ""                                                   | Out-File $summaryFile -Encoding utf8 -Append
 
-          if ($failed -gt 0) {
+          if ($failedNames.Count -gt 0) {
             "Failed unit tests:"                               | Out-File $summaryFile -Encoding utf8 -Append
             foreach ($name in $failedNames) {
               "* $name"                                       | Out-File $summaryFile -Encoding utf8 -Append
@@ -239,6 +278,7 @@ jobs:
           else {
             "Failed unit tests: (none)"                        | Out-File $summaryFile -Encoding utf8 -Append
           }
+
 
 
 
@@ -366,21 +406,56 @@ jobs:
             Write-Host "Parsing INTEGRATION trx: $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
 
-            # Thử đủ kiểu node tên khác nhau
-            $results = @()
-            $nodes1 = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
-            if ($nodes1) { $results += $nodes1 }
-            $nodes2 = $xml.SelectNodes("//*[local-name()='TestResult']")
-            if ($nodes2) { $results += $nodes2 }
+            # 1) Ưu tiên Counters
+            $counters = $xml.SelectSingleNode("//*[local-name()='ResultSummary']/*[local-name()='Counters']")
+            if ($counters) {
+              Write-Host "  -> Using ResultSummary Counters"
+              $total   += [int]($counters.total)
+              $passed  += [int]($counters.passed)
+              $failed  += [int]($counters.failed) + [int]($counters.error) + [int]($counters.timeout)
+              $skipped += [int]($counters.notExecuted) + [int]($counters.inconclusive) + [int]($counters.notRunnable)
+            }
 
-            Write-Host "  -> Found $($results.Count) result nodes"
+            # 2) Lấy tên test fail từ mọi node có outcome
+            $nodes = $xml.SelectNodes("//*[ @outcome ]")
+            Write-Host "  -> Found $($nodes.Count) nodes with 'outcome' attribute"
 
-            foreach ($r in $results) {
-              $total++
-              switch ($r.outcome) {
-                'Passed'      { $passed++ }
-                'Failed'      { $failed++;  $failedNames += $r.testName }
-                'NotExecuted' { $skipped++ }
+            foreach ($n in $nodes) {
+              $oc = "$($n.outcome)".ToLowerInvariant()
+
+              if ($oc -eq 'failed' -or $oc -eq 'error' -or $oc -eq 'timeout') {
+                $name = $null
+                if ($n.Attributes['testName']) { $name = $n.Attributes['testName'].Value }
+                elseif ($n.Attributes['name']) { $name = $n.Attributes['name'].Value }
+                elseif ($n.Attributes['fullName']) { $name = $n.Attributes['fullName'].Value }
+                else { $name = $n.Name }
+
+                if ($name -and -not ($failedNames -contains $name)) {
+                  $failedNames += $name
+                }
+              }
+            }
+          }
+
+          if ($total -eq 0 -and $trxFiles.Count -gt 0) {
+            Write-Host "Counters not found or 0, recomputing totals from nodes..."
+            $total   = 0
+            $passed  = 0
+            $failed  = 0
+            $skipped = 0
+
+            foreach ($file in $trxFiles) {
+              [xml]$xml = Get-Content $file.FullName
+              $nodes = $xml.SelectNodes("//*[ @outcome ]")
+              foreach ($n in $nodes) {
+                $oc = "$($n.outcome)".ToLowerInvariant()
+                switch ($oc) {
+                  'passed'      { $passed++;  $total++ }
+                  'failed'      { $failed++;  $total++ }
+                  'error'       { $failed++;  $total++ }
+                  'timeout'     { $failed++;  $total++ }
+                  'notexecuted' { $skipped++; $total++ }
+                }
               }
             }
           }
@@ -392,7 +467,7 @@ jobs:
           "| $total | $passed | $failed | $skipped |"          | Out-File $summaryFile -Encoding utf8 -Append
           ""                                                   | Out-File $summaryFile -Encoding utf8 -Append
 
-          if ($failed -gt 0) {
+          if ($failedNames.Count -gt 0) {
             "Failed integration tests:"                        | Out-File $summaryFile -Encoding utf8 -Append
             foreach ($name in $failedNames) {
               "* $name"                                       | Out-File $summaryFile -Encoding utf8 -Append
