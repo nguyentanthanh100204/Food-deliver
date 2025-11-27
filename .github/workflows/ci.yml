@@ -202,10 +202,19 @@ jobs:
           $failedNames = @()
 
           foreach ($file in $trxFiles) {
+            # DEBUG: In ra thông tin file
+            Write-Host "Processing file: $($file.FullName)"
             [xml]$xml = Get-Content $file.FullName
+            
+            # DEBUG: In ra root element và namespace
+            Write-Host "Root Element: $($xml.DocumentElement.Name)"
+            Write-Host "NamespaceURI: $($xml.DocumentElement.NamespaceURI)"
 
             # Dùng XPath local-name() để không phụ thuộc namespace
             $results = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
+            
+            # DEBUG: In ra số lượng kết quả tìm thấy
+            Write-Host "Found $($results.Count) UnitTestResult nodes."
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
