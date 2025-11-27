@@ -106,11 +106,22 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Chạy bằng dotnet test (để nó tự build và tìm adapter)
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --configuration Debug `
+          # DEBUG: List build output
+          Write-Host "Listing build output:"
+          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" | Select-Object FullName
+
+          # Chạy bằng dotnet test trên DLL (đã có adapter)
+          dotnet test ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll" `
             --logger "trx;LogFileName=unit-tests.trx" `
             --results-directory "out\unit-results"
+
+          # DEBUG: List results directory
+          Write-Host "Listing results directory:"
+          if (Test-Path "out\unit-results") {
+            Get-ChildItem -Recurse "out\unit-results" | Select-Object FullName
+          } else {
+            Write-Host "Directory out\unit-results not found!"
+          }
 
 
       - name: Enforce coverage threshold
@@ -249,11 +260,22 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --configuration Release `
+          # DEBUG: List build output
+          Write-Host "Listing build output:"
+          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Release" | Select-Object FullName
+
+          dotnet test ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
             --logger "trx;LogFileName=integration-tests.trx" `
             --results-directory $out `
             --filter "TestCategory=Integration"
+
+          # DEBUG: List results directory
+          Write-Host "Listing results directory:"
+          if (Test-Path $out) {
+            Get-ChildItem -Recurse $out | Select-Object FullName
+          } else {
+            Write-Host "Directory $out not found!"
+          }
 
 
   
