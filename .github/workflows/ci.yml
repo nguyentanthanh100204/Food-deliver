@@ -139,6 +139,24 @@ jobs:
             -filter:"+[*]* -[*.Tests*]*" 2>&1 | Tee-Object -FilePath (Join-Path $resultsDir 'vstest.log')
 
 
+
+
+      - name: Generate coverage report (Cobertura format)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          Write-Host "Installing ReportGenerator..."
+          nuget install ReportGenerator -Version 5.1.0 -OutputDirectory packages
+          $rg = (Get-ChildItem -Path packages/ReportGenerator.*/tools/net6.0/ReportGenerator.dll).FullName
+          
+          Write-Host "Converting OpenCover XML to Cobertura format..."
+          if (Test-Path "unit-coverage.xml") {
+            dotnet $rg -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Cobertura"
+            Write-Host "Coverage report generated at unit-coveragereport/Cobertura.xml"
+          } else {
+            Write-Warning "unit-coverage.xml not found. Coverage report skipped."
+          }
+
       - name: Enforce coverage threshold
         if: github.event_name == 'pull_request'
         shell: pwsh
@@ -270,20 +288,28 @@ jobs:
           Write-Host "Starting SQL LocalDB..."
           sqllocaldb start "MSSQLLocalDB"
           
-          Write-Host "Creating database if not exists..."
-          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
+          Write-Host "Dropping existing database if exists..."
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NOT NULL DROP DATABASE [OnlineFoodDB]"
           
           Write-Host "Checking if SQL script exists..."
           if (-not (Test-Path "onlinefoodscript.sql")) {
-            Write-Warning "onlinefoodscript.sql not found! Integration tests may fail."
+            throw "onlinefoodscript.sql not found! Cannot seed database."
+          }
+          
+          Write-Host "Running database schema script (this will CREATE DATABASE)..."
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -i "onlinefoodscript.sql" -b
+          if ($LASTEXITCODE -ne 0) {
+            throw "SQL script execution failed with exit code $LASTEXITCODE"
+          }
+          
+          Write-Host "SQL script executed successfully!"
+          
+          # Verify database was created
+          $checkDb = sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "SELECT DB_ID('OnlineFoodDB')" -h -1
+          if ($checkDb -match '\d+') {
+            Write-Host "Database OnlineFoodDB confirmed created."
           } else {
-            Write-Host "Running database schema script..."
-            sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -b
-            if ($LASTEXITCODE -ne 0) {
-              Write-Error "SQL script execution failed with exit code $LASTEXITCODE"
-            } else {
-              Write-Host "SQL script executed successfully!"
-            }
+            throw "Database OnlineFoodDB not found after script execution!"
           }
   
       - name: Run INTEGRATION tests (dotnet test)
