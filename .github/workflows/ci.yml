@@ -105,24 +105,12 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-      - name: Run UNIT tests (dotnet test)
-        shell: pwsh
-        run: |
-          $bin = Resolve-Path ".\FoodOrderingSystem.Tests\bin"
-          $testDll = Get-ChildItem -Recurse -Path $bin -Filter FoodOrderingSystem.Tests.dll | 
-                     Sort-Object { if ($_.FullName -match '\\bin\\Debug\\') {0} else {1} } | 
-                     Select-Object -First 1
-          
-          if (-not $testDll) { throw "Không tìm thấy FoodOrderingSystem.Tests.dll" }
-          Write-Host "Testing DLL: $($testDll.FullName)"
-
-          $resultsDir = Join-Path $PWD 'out\unit-results'
-          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
-
-          # Chạy bằng dotnet test (tự động tìm adapter)
-          dotnet test $testDll.FullName `
+          # Chạy bằng dotnet test trên file PROJECT (an toàn hơn chạy trên DLL)
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --no-build `
+            --configuration Debug `
             --logger "trx;LogFileName=unit-tests.trx" `
-            --results-directory $resultsDir
+            --results-directory "out\unit-results"
 
 
       - name: Enforce coverage threshold
@@ -258,21 +246,12 @@ jobs:
       - name: Run INTEGRATION tests (dotnet test)
         shell: pwsh
         run: |
-          $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll'
-          if (-not (Test-Path $dll)) {
-             # Fallback tìm debug nếu release không có
-             $dll = Join-Path $PWD 'FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll'
-          }
-          if (-not (Test-Path $dll)) {
-            Write-Error "Không tìm thấy DLL test: $dll"
-            exit 1
-          }
-          Write-Host "Testing DLL: $dll"
-
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-      
-          dotnet test $dll `
+
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --no-build `
+            --configuration Release `
             --logger "trx;LogFileName=integration-tests.trx" `
             --results-directory $out `
             --filter "TestCategory=Integration"
