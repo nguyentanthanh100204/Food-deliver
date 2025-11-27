@@ -74,6 +74,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+      
+      - name: Locate VSTest
+        id: vs
+        uses: darenm/Setup-VSTest@v1.2
   
       - name: Build tests (Debug with PDB)
         shell: pwsh
@@ -214,6 +218,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
+
+      - name: Locate VSTest
+        id: vs
+        uses: darenm/Setup-VSTest@v1.2
       - uses: actions/setup-dotnet@v4        # để dùng lệnh dotnet (SDK)
         with:
           dotnet-version: '9.x'
