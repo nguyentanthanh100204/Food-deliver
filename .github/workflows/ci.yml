@@ -106,22 +106,27 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # DEBUG: List build output
-          Write-Host "Listing build output:"
-          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" | Select-Object FullName
-
-          # Chạy bằng dotnet test trên DLL (đã có adapter)
-          dotnet test ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll" `
-            --logger "trx;LogFileName=unit-tests.trx" `
-            --results-directory "out\unit-results"
-
-          # DEBUG: List results directory
-          Write-Host "Listing results directory:"
-          if (Test-Path "out\unit-results") {
-            Get-ChildItem -Recurse "out\unit-results" | Select-Object FullName
-          } else {
-            Write-Host "Directory out\unit-results not found!"
+          # Tìm VSTest (Robust)
+          $vsPath = vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.Core -property installationPath
+          if (-not $vsPath) { $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" }
+          $vstest = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
+          
+          if (-not (Test-Path $vstest)) { 
+            Write-Host "VSTest not found at $vstest. Searching recursively..."
+            $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
+          if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
+          Write-Host "Using VSTest: $vstest"
+
+          # Đường dẫn DLL và Adapter
+          $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
+          $adapterPath = ".\FoodOrderingSystem.Tests\bin\Debug\net48"
+
+          # Chạy VSTest
+          & $vstest $testDll `
+            /Logger:trx `
+            /ResultsDirectory:"out\unit-results" `
+            /TestAdapterPath:$adapterPath
 
 
       - name: Enforce coverage threshold
@@ -260,22 +265,24 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          # DEBUG: List build output
-          Write-Host "Listing build output:"
-          Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Release" | Select-Object FullName
-
-          dotnet test ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
-            --logger "trx;LogFileName=integration-tests.trx" `
-            --results-directory $out `
-            --filter "TestCategory=Integration"
-
-          # DEBUG: List results directory
-          Write-Host "Listing results directory:"
-          if (Test-Path $out) {
-            Get-ChildItem -Recurse $out | Select-Object FullName
-          } else {
-            Write-Host "Directory $out not found!"
+          # Tìm VSTest (Robust)
+          $vsPath = vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.Core -property installationPath
+          if (-not $vsPath) { $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" }
+          $vstest = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
+          
+          if (-not (Test-Path $vstest)) { 
+             $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
+          if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
+
+          $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
+          $adapterPath = ".\FoodOrderingSystem.Tests\bin\Release\net48"
+
+          & $vstest $testDll `
+            /Logger:trx `
+            /ResultsDirectory:$out `
+            /TestAdapterPath:$adapterPath `
+            /TestCaseFilter:"TestCategory=Integration"
 
 
   
