@@ -74,9 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '9.x'
+      - uses: microsoft/setup-msbuild@v2
   
       - name: Build tests (Debug with PDB)
         shell: pwsh
@@ -108,8 +106,12 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Chạy bằng VSTest (đã được thêm vào PATH)
-          vstest.console.exe "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
+          # Tìm VSTest thủ công bằng vswhere
+          $vstest = vswhere -latest -requires Microsoft.VisualStudio.Component.TestTools.Core -find Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe
+          if (-not $vstest) { throw "Không tìm thấy vstest.console.exe" }
+          Write-Host "VSTest path: $vstest"
+
+          & $vstest "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
             /Logger:trx `
             /ResultsDirectory:"out\unit-results" `
             /TestAdapterPath:".\packages"
@@ -251,7 +253,10 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          vstest.console.exe "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
+          $vstest = vswhere -latest -requires Microsoft.VisualStudio.Component.TestTools.Core -find Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe
+          if (-not $vstest) { throw "Không tìm thấy vstest.console.exe" }
+          
+          & $vstest "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
             /Logger:trx `
             /ResultsDirectory:$out `
             /TestAdapterPath:".\packages" `
