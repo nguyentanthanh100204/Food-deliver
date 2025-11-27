@@ -2,6 +2,8 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Web.Mvc;
 using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Tests;
+using Moq;
+using FoodOrderingSystem.Models;
 
 namespace FoodOrderingSystem.Tests.Unit
 {
