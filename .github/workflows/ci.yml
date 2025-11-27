@@ -266,9 +266,25 @@ jobs:
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
-          sqllocaldb start "MSSQLLocalDB" | Out-Null
+          $ErrorActionPreference = 'Stop'
+          Write-Host "Starting SQL LocalDB..."
+          sqllocaldb start "MSSQLLocalDB"
+          
+          Write-Host "Creating database if not exists..."
           sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
-          sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
+          
+          Write-Host "Checking if SQL script exists..."
+          if (-not (Test-Path "onlinefoodscript.sql")) {
+            Write-Warning "onlinefoodscript.sql not found! Integration tests may fail."
+          } else {
+            Write-Host "Running database schema script..."
+            sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -b
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "SQL script execution failed with exit code $LASTEXITCODE"
+            } else {
+              Write-Host "SQL script executed successfully!"
+            }
+          }
   
       - name: Run INTEGRATION tests (dotnet test)
         shell: pwsh
