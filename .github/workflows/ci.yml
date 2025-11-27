@@ -106,15 +106,11 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Tìm VSTest thủ công bằng vswhere
-          $vstest = vswhere -latest -requires Microsoft.VisualStudio.Component.TestTools.Core -find Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe
-          if (-not $vstest) { throw "Không tìm thấy vstest.console.exe" }
-          Write-Host "VSTest path: $vstest"
-
-          & $vstest "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
-            /Logger:trx `
-            /ResultsDirectory:"out\unit-results" `
-            /TestAdapterPath:".\packages"
+          # Chạy bằng dotnet test (để nó tự build và tìm adapter)
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --configuration Debug `
+            --logger "trx;LogFileName=unit-tests.trx" `
+            --results-directory "out\unit-results"
 
 
       - name: Enforce coverage threshold
@@ -253,14 +249,11 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          $vstest = vswhere -latest -requires Microsoft.VisualStudio.Component.TestTools.Core -find Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe
-          if (-not $vstest) { throw "Không tìm thấy vstest.console.exe" }
-          
-          & $vstest "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
-            /Logger:trx `
-            /ResultsDirectory:$out `
-            /TestAdapterPath:".\packages" `
-            /TestCaseFilter:"TestCategory=Integration"
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --configuration Release `
+            --logger "trx;LogFileName=integration-tests.trx" `
+            --results-directory $out `
+            --filter "TestCategory=Integration"
 
 
   
