@@ -11,13 +11,21 @@ namespace FoodOrderingSystem.Controllers
 {
     public class ShoppingCartController : Controller
     {
-        OnlineFoodDBEntities storeDB = new OnlineFoodDBEntities();
+        IOnlineFoodDBEntities storeDB;
+        public ShoppingCartController()
+        {
+            storeDB = new OnlineFoodDBEntities();
+        }
+        public ShoppingCartController(IOnlineFoodDBEntities db)
+        {
+            storeDB = db;
+        }
         // 
         // GET: /ShoppingCart/ 
         [Authorize]
         public ActionResult ShoppingCartList()
         {
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             // Set up our ViewModel
             var viewModel = new ShoppingCartViewModel
@@ -39,7 +47,7 @@ namespace FoodOrderingSystem.Controllers
                 .Single(item => item.ItemId == id);
 
             // Add it to the shopping cart 
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             cart.AddToCart(addedItem);
 
@@ -54,7 +62,7 @@ namespace FoodOrderingSystem.Controllers
             try
             {
                 // Get the cart 
-                var cart = ShoppingCart.GetCart(this.HttpContext);
+                var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
                 // Get the name of the album to display confirmation 
                 string itemName = storeDB.tblCarts
@@ -98,7 +106,7 @@ namespace FoodOrderingSystem.Controllers
         public ActionResult RemoveFromCart(int id)
         {
             // Remove the item from the cart 
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             // Get the name of the album to display confirmation 
             string albumName = storeDB.tblCarts.Single(item => item.RecordId == id).tblItem.Title;
@@ -123,7 +131,7 @@ namespace FoodOrderingSystem.Controllers
         [ChildActionOnly]
         public ActionResult CartSummary()
         {
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             ViewData["CartCount"] = cart.GetCount();
             return PartialView("CartSummary");
@@ -131,10 +139,10 @@ namespace FoodOrderingSystem.Controllers
         [Authorize]
         public ActionResult AddressAndPayment()
         {
-            //var cart = ShoppingCart.GetCart(this.HttpContext);
+            //var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             //List<tblCart> lst = cart.GetCartItems();
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
             OrderViewModel ordv = new OrderViewModel();
             ordv.Total = cart.GetTotal().ToString();
 
@@ -147,7 +155,7 @@ namespace FoodOrderingSystem.Controllers
 
         public ActionResult AddressAndPayment(OrderViewModel ovm)
         {
-            var cart = ShoppingCart.GetCart(this.HttpContext);
+            var cart = ShoppingCart.GetCart(this.HttpContext, storeDB);
 
             tblOrder tb = new tblOrder();
             tb.Username = Session["username"].ToString();
