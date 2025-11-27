@@ -121,15 +121,22 @@ jobs:
           # Cài đặt Adapter thủ công để chắc chắn có
           nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
+          # Cài đặt OpenCover
+          nuget install OpenCover -Version 4.7.922 -OutputDirectory packages
+          $oc = (Get-ChildItem -Path packages/OpenCover.*/tools/OpenCover.Console.exe).FullName
+
           # Đường dẫn DLL
           $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
+          $resultsDir = "out\unit-results"
+          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 
-          # Chạy VSTest với Adapter Path trỏ vào thư mục vừa cài + x64
-          & $vstest $testDll `
-            /Logger:trx `
-            /ResultsDirectory:"out\unit-results" `
-            /TestAdapterPath:"test-adapters" `
-            /Platform:x64
+          # Chạy VSTest qua OpenCover
+          & $oc -register:user `
+            -returntargetcode `
+            -target:"$vstest" `
+            -targetargs:"`"$testDll`" /Logger:trx /ResultsDirectory:`"$resultsDir`" /TestAdapterPath:`"test-adapters`" /TestCaseFilter:`"TestCategory=Unit`" /Platform:x64" `
+            -output:"unit-coverage.xml" `
+            -filter:"+[*]* -[*.Tests*]*" 2>&1 | Tee-Object -FilePath (Join-Path $resultsDir 'vstest.log')
 
 
       - name: Enforce coverage threshold
@@ -266,7 +273,9 @@ jobs:
       - name: Run INTEGRATION tests (dotnet test)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $out = Join-Path $PWD 'out\integration-results'
+          Write-Host "Creating results directory: $out"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
           # Tìm VSTest (Robust)
@@ -278,10 +287,13 @@ jobs:
              $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
           if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
+          Write-Host "Using VSTest: $vstest"
 
           nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
           $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
+          Write-Host "Test DLL: $testDll"
+          if (-not (Test-Path $testDll)) { throw "Test DLL not found at $testDll" }
           
           & $vstest $testDll `
             /Logger:trx `
