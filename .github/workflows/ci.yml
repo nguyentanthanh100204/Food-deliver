@@ -105,12 +105,12 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Chạy bằng dotnet test trên file PROJECT (an toàn hơn chạy trên DLL)
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --no-build `
-            --configuration Debug `
-            --logger "trx;LogFileName=unit-tests.trx" `
-            --results-directory "out\unit-results"
+          # Chạy bằng VSTest (với tham số TestAdapterPath để tìm adapter trong packages)
+          & "${{ steps.vs.outputs.vstest }}" `
+            "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
+            /Logger:trx `
+            /ResultsDirectory:"out\unit-results" `
+            /TestAdapterPath:".\packages"
 
 
       - name: Enforce coverage threshold
@@ -249,12 +249,12 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --no-build `
-            --configuration Release `
-            --logger "trx;LogFileName=integration-tests.trx" `
-            --results-directory $out `
-            --filter "TestCategory=Integration"
+          & "${{ steps.vs.outputs.vstest }}" `
+            "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
+            /Logger:trx `
+            /ResultsDirectory:$out `
+            /TestAdapterPath:".\packages" `
+            /TestCaseFilter:"TestCategory=Integration"
 
 
   
