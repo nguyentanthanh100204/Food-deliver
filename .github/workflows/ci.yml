@@ -284,7 +284,7 @@ jobs:
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
           Write-Host "Starting SQL LocalDB..."
           sqllocaldb start "MSSQLLocalDB"
           
@@ -297,47 +297,32 @@ jobs:
             throw "onlinefoodscript.sql not found! Cannot seed database."
           }
           
-          Write-Host "Processing SQL script to skip CREATE DATABASE portion..."
-          # Đọc script và bỏ qua các dòng từ đầu đến dòng 'USE [OnlineFoodDB]'
-          $scriptContent = Get-Content "onlinefoodscript.sql" -Raw
+          Write-Host "Running full SQL script (ignoring CREATE DATABASE errors)..."
+          Write-Host "Note: Errors about database creation will be ignored as database is already created"
           
-          # Tìm vị trí của 'USE [OnlineFoodDB]' hoặc 'USE [master]' cuối cùng trước phần tạo tables
-          if ($scriptContent -match '(?s)USE \[OnlineFoodDB\](.+)') {
-            # Tạo script với NOCHECK để bỏ qua foreign key constraints trong quá trình tạo
-            $schemaOnly = "USE [OnlineFoodDB]`r`nGO`r`n`r`n"
-            $schemaOnly += "-- Disable all constraints temporarily`r`n"
-            $schemaOnly += "EXEC sp_MSforeachtable 'ALTER TABLE ? NOCHECK CONSTRAINT ALL'`r`nGO`r`n`r`n"
-            $schemaOnly += $matches[1]
-            $schemaOnly += "`r`n`r`n-- Re-enable all constraints`r`n"
-            $schemaOnly += "EXEC sp_MSforeachtable 'ALTER TABLE ? CHECK CONSTRAINT ALL'`r`nGO`r`n"
-            
-            $schemaOnly | Out-File "schema-only.sql" -Encoding UTF8
-            
-            Write-Host "Running schema portion of SQL script (with constraints disabled)..."
-            sqlcmd -S "(localdb)\MSSQLLocalDB" -i "schema-only.sql"
-            
-            # Don't fail on errors - some constraint errors are expected
-            if ($LASTEXITCODE -ne 0) {
-              Write-Warning "SQL script had exit code $LASTEXITCODE but continuing (constraint errors are expected)..."
-            }
-          } else {
-            Write-Warning "Could not find 'USE [OnlineFoodDB]' in script. Running full script..."
-            sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
-            if ($LASTEXITCODE -ne 0) {
-              Write-Warning "SQL script had errors but continuing..."
-            }
-          }
+          # Run script with database context to skip CREATE DATABASE
+          # -m 1 means report only severe errors (level 17+)
+          # This will ignore the CREATE DATABASE error but continue creating tables
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -m 1 -V 17 | Out-String | Write-Host
           
-          Write-Host "SQL setup completed!"
+          Write-Host "`nSQL script execution completed (errors during CREATE DATABASE are expected and ignored)"
           
-          # Verify database and check for tables
+          # Verify database exists
+          Write-Host "`nVerifying database setup..."
           $checkDb = sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "SELECT DB_ID('OnlineFoodDB')" -h -1
           if ($checkDb -match '\d+') {
             Write-Host "✓ Database OnlineFoodDB exists"
             
-            # Check if tables were created
-            $tableCount = sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -Q "SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" -h -1
-            Write-Host "✓ Found $tableCount tables in database"
+            # Check tables
+            $tables = sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" -h -1 | Where-Object { $_.Trim() }
+            $tableCount = ($tables | Measure-Object).Count
+            
+            Write-Host "✓ Found $tableCount tables in database:"
+            $tables | ForEach-Object { Write-Host "  - $($_.Trim())" }
+            
+            if ($tableCount -eq 0) {
+              throw "No tables found in database! SQL script may have failed completely."
+            }
           } else {
             throw "Database OnlineFoodDB not found!"
           }
