@@ -74,10 +74,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      
-      - name: Locate VSTest
-        id: vs
-        uses: darenm/Setup-VSTest@v1.2
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.x'
   
       - name: Build tests (Debug with PDB)
         shell: pwsh
@@ -109,12 +108,11 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Chạy bằng VSTest (với tham số TestAdapterPath để tìm adapter trong packages)
-          & "${{ steps.vs.outputs.vstest }}" `
-            "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
-            /Logger:trx `
-            /ResultsDirectory:"out\unit-results" `
-            /TestAdapterPath:".\packages"
+          # Chạy bằng dotnet test (để nó tự build và tìm adapter)
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --configuration Debug `
+            --logger "trx;LogFileName=unit-tests.trx" `
+            --results-directory "out\unit-results"
 
 
       - name: Enforce coverage threshold
@@ -218,10 +216,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-
-      - name: Locate VSTest
-        id: vs
-        uses: darenm/Setup-VSTest@v1.2
       - uses: actions/setup-dotnet@v4        # để dùng lệnh dotnet (SDK)
         with:
           dotnet-version: '9.x'
@@ -257,12 +251,11 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          & "${{ steps.vs.outputs.vstest }}" `
-            "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
-            /Logger:trx `
-            /ResultsDirectory:$out `
-            /TestAdapterPath:".\packages" `
-            /TestCaseFilter:"TestCategory=Integration"
+          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            --configuration Release `
+            --logger "trx;LogFileName=integration-tests.trx" `
+            --results-directory $out `
+            --filter "TestCategory=Integration"
 
 
   
