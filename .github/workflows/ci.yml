@@ -108,11 +108,11 @@ jobs:
           Get-ChildItem -Recurse ".\FoodOrderingSystem.Tests\bin\Debug" -Filter *.pdb | Select-Object FullName
 
   
-          # Chạy bằng dotnet test (để nó tự build và tìm adapter)
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --configuration Debug `
-            --logger "trx;LogFileName=unit-tests.trx" `
-            --results-directory "out\unit-results"
+          # Chạy bằng VSTest (đã được thêm vào PATH)
+          vstest.console.exe "FoodOrderingSystem.Tests\bin\Debug\FoodOrderingSystem.Tests.dll" `
+            /Logger:trx `
+            /ResultsDirectory:"out\unit-results" `
+            /TestAdapterPath:".\packages"
 
 
       - name: Enforce coverage threshold
@@ -251,11 +251,11 @@ jobs:
           $out = Join-Path $PWD 'out\integration-results'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
-          dotnet test ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
-            --configuration Release `
-            --logger "trx;LogFileName=integration-tests.trx" `
-            --results-directory $out `
-            --filter "TestCategory=Integration"
+          vstest.console.exe "FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll" `
+            /Logger:trx `
+            /ResultsDirectory:$out `
+            /TestAdapterPath:".\packages" `
+            /TestCaseFilter:"TestCategory=Integration"
 
 
   
