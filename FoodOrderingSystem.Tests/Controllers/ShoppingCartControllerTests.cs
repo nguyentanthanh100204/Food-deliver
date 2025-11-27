@@ -30,11 +30,21 @@ namespace FoodOrderingSystem.Tests.Controllers
 
         [TestMethod]
         [TestCategory(TestCategories.Unit)]
-
         public void ShoppingCartList_WhenCalled_ReturnsViewAndViewModel()
         {
             // Arrange
-            var controller = new ShoppingCartController();
+            var mockDb = new Mock<IOnlineFoodDBEntities>();
+            // Setup mock DbSet for tblCarts to avoid NullReferenceException
+            var data = new List<tblCart>().AsQueryable();
+            var mockSet = new Mock<System.Data.Entity.DbSet<tblCart>>();
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.Provider).Returns(data.Provider);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.Expression).Returns(data.Expression);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.ElementType).Returns(data.ElementType);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.GetEnumerator()).Returns(data.GetEnumerator());
+
+            mockDb.Setup(m => m.tblCarts).Returns(mockSet.Object);
+            
+            var controller = new ShoppingCartController(mockDb.Object);
             controller.ControllerContext = BuildContext(controller);
 
             // Act

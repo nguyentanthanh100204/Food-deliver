@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Web.Mvc;
 using FoodOrderingSystem.Controllers;
+using FoodOrderingSystem.Tests;
 
 namespace FoodOrderingSystem.Tests.Unit
 {
@@ -8,10 +9,12 @@ namespace FoodOrderingSystem.Tests.Unit
     public class HomeControllerTests
     {
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]
         public void Index_WhenCalled_ReturnsDefaultView()
         {
             // Arrange
-            var controller = new HomeController();
+            var mockDb = new Mock<IOnlineFoodDBEntities>();
+            var controller = new HomeController(mockDb.Object);
 
             // Act
             var result = controller.Index() as ViewResult;

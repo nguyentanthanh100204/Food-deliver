@@ -226,7 +226,7 @@ jobs:
 
 
   integration_tests:
-    if: github.event_name == 'push'   # chỉ chạy khi push/merge vào main
+    # Run on both push and PR
     needs: build
     runs-on: windows-latest
   
