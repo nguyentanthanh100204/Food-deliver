@@ -124,30 +124,12 @@ jobs:
           # Đường dẫn DLL
           $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
 
-          # DEBUG: List adapter directory
-          Write-Host "Listing test-adapters:"
-          Get-ChildItem -Recurse "test-adapters" | Select-Object FullName
-
-          # Chạy VSTest với Adapter Path trỏ vào thư mục vừa cài + Diagnostics + x64
+          # Chạy VSTest với Adapter Path trỏ vào thư mục vừa cài + x64
           & $vstest $testDll `
             /Logger:trx `
             /ResultsDirectory:"out\unit-results" `
             /TestAdapterPath:"test-adapters" `
-            /Platform:x64 `
-            /Diag:vstest-diag.txt
-
-          # DEBUG: Print VSTest Diagnostics
-          if (Test-Path "vstest-diag.txt") {
-            Write-Host "=== VSTest Diagnostics ==="
-            Get-Content "vstest-diag.txt" | Select-Object -Last 100 # In 100 dòng cuối
-          }
-
-          # DEBUG: Print TRX content
-          $trxFile = Get-ChildItem "out\unit-results\*.trx" | Select-Object -First 1
-          if ($trxFile) {
-            Write-Host "Content of $($trxFile.Name):"
-            Get-Content $trxFile.FullName
-          }
+            /Platform:x64
 
 
       - name: Enforce coverage threshold
@@ -301,30 +283,12 @@ jobs:
 
           $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
           
-          # DEBUG: List adapter directory
-          Write-Host "Listing test-adapters:"
-          Get-ChildItem -Recurse "test-adapters" | Select-Object FullName
-
           & $vstest $testDll `
             /Logger:trx `
             /ResultsDirectory:$out `
             /TestAdapterPath:"test-adapters" `
             /TestCaseFilter:"TestCategory=Integration" `
-            /Platform:x64 `
-            /Diag:integration-diag.txt
-
-          # DEBUG: Print VSTest Diagnostics
-          if (Test-Path "integration-diag.txt") {
-            Write-Host "=== Integration Test Diagnostics ==="
-            Get-Content "integration-diag.txt" | Select-Object -Last 100
-          }
-
-          # DEBUG: Print TRX content
-          $trxFile = Get-ChildItem "$out\*.trx" | Select-Object -First 1
-          if ($trxFile) {
-            Write-Host "Content of $($trxFile.Name):"
-            Get-Content $trxFile.FullName
-          }
+            /Platform:x64
 
 
   
