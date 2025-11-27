@@ -204,11 +204,8 @@ jobs:
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
 
-            # xử lý namespace trong .trx
-            $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-            $ns.AddNamespace("t", $xml.DocumentElement.NamespaceURI)
-
-            $results = $xml.SelectNodes("//t:UnitTestResult", $ns)
+            # Dùng XPath local-name() để không phụ thuộc namespace
+            $results = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
@@ -364,10 +361,8 @@ jobs:
           foreach ($file in $trxFiles) {
             [xml]$xml = Get-Content $file.FullName
 
-            $ns = New-Object System.Xml.XmlNamespaceManager($xml.NameTable)
-            $ns.AddNamespace("t", $xml.DocumentElement.NamespaceURI)
-
-            $results = $xml.SelectNodes("//t:UnitTestResult", $ns)
+            # Dùng XPath local-name() để không phụ thuộc namespace
+            $results = $xml.SelectNodes("//*[local-name()='UnitTestResult']")
             foreach ($r in $results) {
               $total++
               switch ($r.outcome) {
