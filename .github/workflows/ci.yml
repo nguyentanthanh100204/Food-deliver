@@ -74,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: microsoft/setup-msbuild@v2
-      - uses: microsoft/setup-msbuild@v2
+      - uses: nuget/setup-nuget@v2
   
       - name: Build tests (Debug with PDB)
         shell: pwsh
@@ -118,15 +118,17 @@ jobs:
           if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
           Write-Host "Using VSTest: $vstest"
 
-          # Đường dẫn DLL và Adapter
-          $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
-          $adapterPath = ".\FoodOrderingSystem.Tests\bin\Debug\net48"
+          # Cài đặt Adapter thủ công để chắc chắn có
+          nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
-          # Chạy VSTest
+          # Đường dẫn DLL
+          $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
+
+          # Chạy VSTest với Adapter Path trỏ vào thư mục vừa cài
           & $vstest $testDll `
             /Logger:trx `
             /ResultsDirectory:"out\unit-results" `
-            /TestAdapterPath:$adapterPath
+            /TestAdapterPath:"test-adapters"
 
 
       - name: Enforce coverage threshold
@@ -233,6 +235,7 @@ jobs:
       - uses: actions/setup-dotnet@v4        # để dùng lệnh dotnet (SDK)
         with:
           dotnet-version: '9.x'
+      - uses: nuget/setup-nuget@v2
   
       - name: Build (Release) for integration tests
         shell: pwsh
@@ -275,13 +278,14 @@ jobs:
           }
           if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
 
-          $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
-          $adapterPath = ".\FoodOrderingSystem.Tests\bin\Release\net48"
+          nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
+          $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
+          
           & $vstest $testDll `
             /Logger:trx `
             /ResultsDirectory:$out `
-            /TestAdapterPath:$adapterPath `
+            /TestAdapterPath:"test-adapters" `
             /TestCaseFilter:"TestCategory=Integration"
 
 
