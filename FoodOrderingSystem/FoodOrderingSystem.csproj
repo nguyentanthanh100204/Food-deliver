@@ -422,6 +422,8 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Model1.edmx</DependentUpon>
     </Compile>
+    <Compile Include="Models\IOnlineFoodDBEntities.cs" />
+    <Compile Include="Models\OnlineFoodDBEntities.Partial.cs" />
     <Compile Include="Models\MyMenu.cs" />
     <Compile Include="Models\Role.cs">
       <DependentUpon>Model1.tt</DependentUpon>

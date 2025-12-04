@@ -8,15 +8,33 @@ namespace FoodOrderingSystem.Models
 {
     public class ShoppingCart
     {
-        OnlineFoodDBEntities storeDB = new OnlineFoodDBEntities();
+        IOnlineFoodDBEntities storeDB;
+
+        public ShoppingCart()
+        {
+            storeDB = new OnlineFoodDBEntities();
+        }
+
+        public ShoppingCart(IOnlineFoodDBEntities db)
+        {
+            storeDB = db;
+        }
+
         string ShoppingCartId { get; set; }
         public const string CartSessionKey = "CartId";
+        
         public static ShoppingCart GetCart(HttpContextBase context)
         {
-            var cart = new ShoppingCart();
+            return GetCart(context, new OnlineFoodDBEntities());
+        }
+
+        public static ShoppingCart GetCart(HttpContextBase context, IOnlineFoodDBEntities db)
+        {
+            var cart = new ShoppingCart(db);
             cart.ShoppingCartId = cart.GetCartId(context);
             return cart;
         }
+
         // Helper method to simplify shopping cart calls 
         public static ShoppingCart GetCart(Controller controller)
         {

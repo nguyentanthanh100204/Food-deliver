@@ -15,7 +15,18 @@ namespace FoodOrderingSystem.Controllers
     public class HomeController : Controller
     {
         // GET: Home
-        OnlineFoodDBEntities _db = new OnlineFoodDBEntities();
+        // GET: Home
+        IOnlineFoodDBEntities _db;
+
+        public HomeController()
+        {
+            _db = new OnlineFoodDBEntities();
+        }
+
+        public HomeController(IOnlineFoodDBEntities db)
+        {
+            _db = db;
+        }
         public ActionResult Index()
         {
             return View(_db.tblBanners.ToList());

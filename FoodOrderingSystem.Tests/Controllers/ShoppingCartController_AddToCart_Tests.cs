@@ -26,6 +26,16 @@ namespace FoodOrderingSystem.Tests.Controllers
             var http = new Mock<HttpContextBase>();
             http.SetupGet(x => x.Session).Returns(new FakeSession()); // session giả
 
+            // Mock User and Identity to prevent NullReferenceException in GetCartId
+            var mockIdentity = new Mock<System.Security.Principal.IIdentity>();
+            mockIdentity.Setup(x => x.Name).Returns(string.Empty);
+            mockIdentity.Setup(x => x.IsAuthenticated).Returns(false);
+
+            var mockPrincipal = new Mock<System.Security.Principal.IPrincipal>();
+            mockPrincipal.Setup(x => x.Identity).Returns(mockIdentity.Object);
+
+            http.SetupGet(x => x.User).Returns(mockPrincipal.Object);
+
             var ctx = new ControllerContext(
                 new RequestContext(http.Object, new RouteData()), controller);
 

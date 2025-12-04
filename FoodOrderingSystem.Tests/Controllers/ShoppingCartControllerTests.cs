@@ -4,6 +4,8 @@ using System.Web.Mvc;
 using System.Web.Routing;
 using Moq;
 using System.Transactions;
+using System.Collections.Generic;
+using System.Linq;
 
 using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Models;
@@ -22,6 +24,16 @@ namespace FoodOrderingSystem.Tests.Controllers
             var http = new Mock<HttpContextBase>();
             http.SetupGet(x => x.Session).Returns(session ?? new FakeSession());
 
+            // Mock User and Identity to prevent NullReferenceException in GetCartId
+            var mockIdentity = new Mock<System.Security.Principal.IIdentity>();
+            mockIdentity.Setup(x => x.Name).Returns(string.Empty);
+            mockIdentity.Setup(x => x.IsAuthenticated).Returns(false);
+
+            var mockPrincipal = new Mock<System.Security.Principal.IPrincipal>();
+            mockPrincipal.Setup(x => x.Identity).Returns(mockIdentity.Object);
+
+            http.SetupGet(x => x.User).Returns(mockPrincipal.Object);
+
             var ctx = new ControllerContext(
                 new RequestContext(http.Object, new RouteData()), controller);
 
@@ -30,11 +42,21 @@ namespace FoodOrderingSystem.Tests.Controllers
 
         [TestMethod]
         [TestCategory(TestCategories.Unit)]
-
         public void ShoppingCartList_WhenCalled_ReturnsViewAndViewModel()
         {
             // Arrange
-            var controller = new ShoppingCartController();
+            var mockDb = new Mock<IOnlineFoodDBEntities>();
+            // Setup mock DbSet for tblCarts to avoid NullReferenceException
+            var data = new List<tblCart>().AsQueryable();
+            var mockSet = new Mock<System.Data.Entity.DbSet<tblCart>>();
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.Provider).Returns(data.Provider);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.Expression).Returns(data.Expression);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.ElementType).Returns(data.ElementType);
+            mockSet.As<IQueryable<tblCart>>().Setup(m => m.GetEnumerator()).Returns(data.GetEnumerator());
+
+            mockDb.Setup(m => m.tblCarts).Returns(mockSet.Object);
+            
+            var controller = new ShoppingCartController(mockDb.Object);
             controller.ControllerContext = BuildContext(controller);
 
             // Act

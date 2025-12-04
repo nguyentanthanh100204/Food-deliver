@@ -121,16 +121,41 @@ jobs:
           # Cài đặt Adapter thủ công để chắc chắn có
           nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
+          # Cài đặt OpenCover
+          nuget install OpenCover -Version 4.7.922 -OutputDirectory packages
+          $oc = (Get-ChildItem -Path packages/OpenCover.*/tools/OpenCover.Console.exe).FullName
+
           # Đường dẫn DLL
           $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
+          $resultsDir = "out\unit-results"
+          New-Item -ItemType Directory -Force -Path $resultsDir | Out-Null
 
-          # Chạy VSTest với Adapter Path trỏ vào thư mục vừa cài + x64
-          & $vstest $testDll `
-            /Logger:trx `
-            /ResultsDirectory:"out\unit-results" `
-            /TestAdapterPath:"test-adapters" `
-            /Platform:x64
+          # Chạy VSTest qua OpenCover
+          & $oc -register:user `
+            -returntargetcode `
+            -target:"$vstest" `
+            -targetargs:"`"$testDll`" /Logger:trx /ResultsDirectory:`"$resultsDir`" /TestAdapterPath:`"test-adapters`" /TestCaseFilter:`"TestCategory=Unit`" /Platform:x64" `
+            -output:"unit-coverage.xml" `
+            -filter:"+[*]* -[*.Tests*]*" 2>&1 | Tee-Object -FilePath (Join-Path $resultsDir 'vstest.log')
 
+
+
+
+      - name: Generate coverage report (Cobertura format)
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: |
+          Write-Host "Installing ReportGenerator..."
+          nuget install ReportGenerator -Version 5.1.0 -OutputDirectory packages
+          $rg = (Get-ChildItem -Path packages/ReportGenerator.*/tools/net6.0/ReportGenerator.dll).FullName
+          
+          Write-Host "Converting OpenCover XML to Cobertura format..."
+          if (Test-Path "unit-coverage.xml") {
+            dotnet $rg -reports:"unit-coverage.xml" -targetdir:"unit-coveragereport" -reporttypes:"Cobertura"
+            Write-Host "Coverage report generated at unit-coveragereport/Cobertura.xml"
+          } else {
+            Write-Warning "unit-coverage.xml not found. Coverage report skipped."
+          }
 
       - name: Enforce coverage threshold
         if: github.event_name == 'pull_request'
@@ -226,7 +251,7 @@ jobs:
 
 
   integration_tests:
-    if: github.event_name == 'push'   # chỉ chạy khi push/merge vào main
+    # Run on both push and PR
     needs: build
     runs-on: windows-latest
   
@@ -259,14 +284,55 @@ jobs:
       - name: Prepare SQL LocalDB and seed schema
         shell: pwsh
         run: |
-          sqllocaldb start "MSSQLLocalDB" | Out-Null
-          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NULL CREATE DATABASE [OnlineFoodDB]"
-          sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql"
+          $ErrorActionPreference = 'Continue'
+          Write-Host "Starting SQL LocalDB..."
+          sqllocaldb start "MSSQLLocalDB"
+          
+          Write-Host "Creating fresh database..."
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NOT NULL DROP DATABASE [OnlineFoodDB]"
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "CREATE DATABASE [OnlineFoodDB]"
+          
+          Write-Host "Checking if SQL script exists..."
+          if (-not (Test-Path "onlinefoodscript.sql")) {
+            throw "onlinefoodscript.sql not found! Cannot seed database."
+          }
+          
+          Write-Host "Running full SQL script (ignoring CREATE DATABASE errors)..."
+          Write-Host "Note: Errors about database creation will be ignored as database is already created"
+          
+          # Run script with database context to skip CREATE DATABASE
+          # -m 1 means report only severe errors (level 17+)
+          # This will ignore the CREATE DATABASE error but continue creating tables
+          sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -m 1 -V 17 | Out-String | Write-Host
+          
+          Write-Host "`nSQL script execution completed (errors during CREATE DATABASE are expected and ignored)"
+          
+          # Verify database exists
+          Write-Host "`nVerifying database setup..."
+          $checkDb = sqlcmd -S "(localdb)\MSSQLLocalDB" -Q "SELECT DB_ID('OnlineFoodDB')" -h -1
+          if ($checkDb -match '\d+') {
+            Write-Host "✓ Database OnlineFoodDB exists"
+            
+            # Check tables
+            $tables = sqlcmd -S "(localdb)\MSSQLLocalDB" -d "OnlineFoodDB" -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" -h -1 | Where-Object { $_.Trim() }
+            $tableCount = ($tables | Measure-Object).Count
+            
+            Write-Host "✓ Found $tableCount tables in database:"
+            $tables | ForEach-Object { Write-Host "  - $($_.Trim())" }
+            
+            if ($tableCount -eq 0) {
+              throw "No tables found in database! SQL script may have failed completely."
+            }
+          } else {
+            throw "Database OnlineFoodDB not found!"
+          }
   
       - name: Run INTEGRATION tests (dotnet test)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $out = Join-Path $PWD 'out\integration-results'
+          Write-Host "Creating results directory: $out"
           New-Item -ItemType Directory -Force -Path $out | Out-Null
 
           # Tìm VSTest (Robust)
@@ -278,10 +344,13 @@ jobs:
              $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
           }
           if (-not $vstest) { throw "Critical: vstest.console.exe not found!" }
+          Write-Host "Using VSTest: $vstest"
 
           nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
 
           $testDll = ".\FoodOrderingSystem.Tests\bin\Release\net48\FoodOrderingSystem.Tests.dll"
+          Write-Host "Test DLL: $testDll"
+          if (-not (Test-Path $testDll)) { throw "Test DLL not found at $testDll" }
           
           & $vstest $testDll `
             /Logger:trx `
