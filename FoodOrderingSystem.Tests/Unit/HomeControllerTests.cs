@@ -74,7 +74,7 @@ namespace FoodOrderingSystem.Tests.Unit
             
             // Verify found item có chứa "Phở" 
             var items = ((PagedList.IPagedList<tblItem>)result.Model).ToList();
-            Assert.AreEqual(5, items.Count, "Should find 5 items matching 'Phở'"); // ❌ INTENTIONAL FAIL - Expect 5 but actually 1
+            Assert.AreEqual(1, items.Count, "Should find 1 item matching 'Phở'"); // ✅ FIXED - Correct expectation
             Assert.IsTrue(items[0].Title.Contains("Phở"), "Found item should contain 'Phở' in title");
         }
     }
