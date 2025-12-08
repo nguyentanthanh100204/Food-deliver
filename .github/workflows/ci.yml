@@ -10,6 +10,12 @@ on:
   push:
     branches: [ main ]
 
+env:
+  DD_API_KEY: ${{ secrets.DD_API_KEY }}
+  DD_SITE: ${{ secrets.DD_SITE }}
+  DD_ENV: ci
+  DD_SERVICE: food-ordering-system
+
 jobs:
   build:
     runs-on: windows-latest
