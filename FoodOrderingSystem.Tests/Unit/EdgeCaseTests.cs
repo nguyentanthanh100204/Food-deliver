@@ -1,7 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FoodOrderingSystem.Controllers;
 using FoodOrderingSystem.Models;
+using OnlineFoodOrderingSystem.Models.ViewModel;
 using System.Web.Mvc;
+using System.Collections.Generic;
 
 namespace FoodOrderingSystem.Tests.Unit
 {
@@ -97,22 +99,20 @@ namespace FoodOrderingSystem.Tests.Unit
 
         [TestMethod]
         [TestCategory(TestCategories.Unit)]
-        public void ShoppingVm_Properties_Work_Correctly()
+        public void ShoppingCartViewModel_Properties_Work_Correctly()
         {
             // Arrange
-            var shoppingVm = new ShoppingVm();
+            var cartVm = new ShoppingCartViewModel();
+            var testItems = new List<tblCart>();
+            decimal testTotal = 150000;
 
             // Act
-            shoppingVm.ProductId = 123;
-            shoppingVm.ProductName = "Test Product";
-            shoppingVm.Price = 50000;
-            shoppingVm.Quantity = 2;
+            cartVm.CartItems = testItems;
+            cartVm.CartTotal = testTotal;
 
             // Assert
-            Assert.AreEqual(123, shoppingVm.ProductId);
-            Assert.AreEqual("Test Product", shoppingVm.ProductName);
-            Assert.AreEqual(50000, shoppingVm.Price);
-            Assert.AreEqual(2, shoppingVm.Quantity);
+            Assert.IsNotNull(cartVm.CartItems);
+            Assert.AreEqual(testTotal, cartVm.CartTotal);
         }
 
         [TestMethod]
