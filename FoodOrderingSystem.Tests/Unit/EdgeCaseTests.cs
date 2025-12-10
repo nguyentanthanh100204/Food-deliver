@@ -178,7 +178,7 @@ namespace FoodOrderingSystem.Tests.Unit
 
             // Assert - Không crash, xử lý được
             Assert.IsTrue(containsTest, "Contains() hoạt động với special chars");
-            Assert.AreEqual(10, length, "Length tính đúng");
+            Assert.AreEqual(9, length, "Length tính đúng - '@#$%^&*()' có 9 ký tự");
             Assert.IsNotNull(uppercase, "ToUpper() không crash");
             // Test PASS = Safe handling của special characters
         }
