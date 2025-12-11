@@ -46,6 +46,7 @@ namespace FoodOrderingSystem.Tests.Controllers
         }
 
         [TestMethod]
+        [TestCategory(TestCategories.Unit)]  // 🔧 FIXED: Was missing, causing test to be skipped in CI!
         public void Index_WhenCalled_ModelIsListOfBanners()
         {
             // Arrange

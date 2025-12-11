@@ -10,6 +10,12 @@ on:
   push:
     branches: [ main ]
 
+env:
+  DD_API_KEY: ${{ secrets.DD_API_KEY }}
+  DD_SITE: ${{ secrets.DD_SITE }}
+  DD_ENV: ci
+  DD_SERVICE: food-ordering-system
+
 jobs:
   build:
     runs-on: windows-latest
@@ -248,6 +254,23 @@ jobs:
             "✅ Tất cả unit tests đều PASS."            | Out-File $summaryFile -Encoding utf8 -Append
           }
 
+      - name: Upload to Datadog CI
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "📊 Sending CI data to Datadog..."
+          
+          # Install datadog-ci
+          npm install -g @datadog/datadog-ci
+          
+          # Set Datadog environment
+          $env:DATADOG_API_KEY = "${{ secrets.DD_API_KEY }}"
+          $env:DATADOG_SITE = "${{ secrets.DD_SITE }}"
+          
+          # Upload git metadata
+          datadog-ci git-metadata upload
+          
+          Write-Host "✅ Datadog CI data uploaded successfully"
 
 
   integration_tests:
