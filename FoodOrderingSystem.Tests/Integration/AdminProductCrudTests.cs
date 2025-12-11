@@ -1,0 +1,206 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using FoodOrderingSystem.Models;
+using System;
+using System.Linq;
+
+namespace FoodOrderingSystem.Tests.Integration
+{
+    /// <summary>
+    /// Integration tests cho admin product management (CRUD operations)
+    /// Tests trực tiếp database operations để verify data integrity
+    /// </summary>
+    [TestClass]
+    public class AdminProductCrudTests : IntegrationTestBase
+    {
+        [TestMethod]
+        [TestCategory(TestCategories.Integration)]
+        public void Integration_CreateProduct_PersistsInDatabase()
+        {
+            // Arrange
+            var uniqueTitle = $"Admin Product {Guid.NewGuid():N}";
+            var testProduct = new tblItem
+            {
+                Title = uniqueTitle,
+                Description = "Created by admin integration test",
+                Price = 150000,
+                SubMenuId = 1,
+                // Add other required fields if needed
+            };
+
+            // Act - Create product
+            using (var db = new OnlineFoodDBEntities())
+            {
+                db.tblItems.Add(testProduct);
+                db.SaveChanges();
+            }
+
+            // Assert - Verify product exists
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var createdProduct = db.tblItems.FirstOrDefault(p => p.Title == uniqueTitle);
+                Assert.IsNotNull(createdProduct, "Product should be created in database");
+                Assert.AreEqual(uniqueTitle, createdProduct.Title);
+                Assert.AreEqual(150000, createdProduct.Price);
+                Assert.AreEqual("Created by admin integration test", createdProduct.Description);
+            }
+        }
+
+        [TestMethod]
+        [TestCategory(TestCategories.Integration)]
+        public void Integration_UpdateProduct_ChangesArePersisted()
+        {
+            // Arrange - Create product first
+            var uniqueTitle = $"Update Test {Guid.NewGuid():N}";
+            int productId;
+            
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = new tblItem
+                {
+                    Title = uniqueTitle,
+                    Description = "Original description",
+                    Price = 100000,
+                    SubMenuId = 1
+                };
+                db.tblItems.Add(product);
+                db.SaveChanges();
+                productId = product.ItemId;
+            }
+
+            // Act - Update product
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = db.tblItems.Find(productId);
+                product.Description = "Updated description";
+                product.Price = 120000;
+                db.SaveChanges();
+            }
+
+            // Assert - Verify changes persisted
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var updatedProduct = db.tblItems.Find(productId);
+                Assert.AreEqual("Updated description", updatedProduct.Description);
+                Assert.AreEqual(120000, updatedProduct.Price);
+                Assert.AreEqual(uniqueTitle, updatedProduct.Title, "Title should not change");
+            }
+        }
+
+        [TestMethod]
+        [TestCategory(TestCategories.Integration)]
+        public void Integration_DeleteProduct_RemovesFromDatabase()
+        {
+            // Arrange - Create product
+            var uniqueTitle = $"Delete Test {Guid.NewGuid():N}";
+            int productId;
+            
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = new tblItem
+                {
+                    Title = uniqueTitle,
+                    Description = "To be deleted",
+                    Price = 50000,
+                    SubMenuId = 1
+                };
+                db.tblItems.Add(product);
+                db.SaveChanges();
+                productId = product.ItemId;
+            }
+
+            // Verify it exists
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = db.tblItems.Find(productId);
+                Assert.IsNotNull(product, "Product should exist before deletion");
+            }
+
+            // Act - Delete product
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = db.tblItems.Find(productId);
+                db.tblItems.Remove(product);
+                db.SaveChanges();
+            }
+
+            // Assert - Verify deletion
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var deletedProduct = db.tblItems.Find(productId);
+                Assert.IsNull(deletedProduct, "Product should be deleted from database");
+            }
+        }
+
+        [TestMethod]
+        [TestCategory(TestCategories.Integration)]
+        public void Integration_ProductIdAutoGenerated()
+        {
+            // Arrange & Act - Create product without explicitly setting ID
+            int generatedId;
+            var uniqueTitle = $"AutoID {Guid.NewGuid():N}";
+            
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = new tblItem
+                {
+                    Title = uniqueTitle,
+                    Description = "Test auto-generated ID",
+                    Price = 75000,
+                    SubMenuId = 1
+                };
+                
+                // ItemId should be 0 before saving
+                Assert.AreEqual(0, product.ItemId, "ItemId should be 0 before saving");
+                
+                db.tblItems.Add(product);
+                db.SaveChanges();
+                
+                generatedId = product.ItemId;
+            }
+
+            // Assert - Verify ID was auto-generated
+            Assert.IsTrue(generatedId > 0, "ItemId should be auto-generated and greater than 0");
+            
+            // Verify can retrieve by generated ID
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = db.tblItems.Find(generatedId);
+                Assert.IsNotNull(product, "Should be able to find product by generated ID");
+                Assert.AreEqual(uniqueTitle, product.Title);
+            }
+        }
+
+        [TestMethod]
+        [TestCategory(TestCategories.Integration)]
+        public void Integration_ProductWithForeignKey_MaintainsRelationship()
+        {
+            // Arrange & Act - Create product with SubMenuId
+            var uniqueTitle = $"FK Test {Guid.NewGuid():N}";
+            int testSubMenuId = 1;
+            
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = new tblItem
+                {
+                    Title = uniqueTitle,
+                    Description = "Testing foreign key relationship",
+                    Price = 90000,
+                    SubMenuId = testSubMenuId
+                };
+                db.tblItems.Add(product);
+                db.SaveChanges();
+            }
+
+            // Assert - Verify foreign key relationship
+            using (var db = new OnlineFoodDBEntities())
+            {
+                var product = db.tblItems.FirstOrDefault(p => p.Title == uniqueTitle);
+                Assert.IsNotNull(product);
+                Assert.AreEqual(testSubMenuId, product.SubMenuId);
+                
+                // If navigation property exists, verify it
+                // Assert.IsNotNull(product.tblSubMenu, "Should have navigation property");
+            }
+        }
+    }
+}
