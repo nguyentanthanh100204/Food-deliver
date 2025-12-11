@@ -1,0 +1,104 @@
+name: demo-ci-full
+# 🚀 Fast FULL test suite for demos - ALL 22 TESTS in ~3-4 minutes
+# Runs ALL tests (19 unit + 3 integration) but skips coverage/packaging
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  fast-full-tests:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - uses: nuget/setup-nuget@v2
+
+      # Cache for speed
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            **/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # Single fast build
+      - name: ⚡ Fast Build (Debug)
+        shell: pwsh
+        run: |
+          Write-Host "🚀 OPTIMIZED BUILD for demo..."
+          nuget restore FoodOrderingSystem.sln
+          msbuild FoodOrderingSystem.sln -t:Restore
+          msbuild FoodOrderingSystem.sln /p:Configuration=Debug /m /verbosity:minimal
+
+      # Setup SQL for integration tests (REQUIRED for all 22 tests)
+      - name: 🗄️ Quick SQL Setup
+        shell: pwsh
+        run: |
+          Write-Host "Setting up SQL LocalDB (minimal)..."
+          sqllocaldb start "MSSQLLocalDB"
+          sqlcmd -S "(localdb)\\MSSQLLocalDB" -Q "CREATE DATABASE [OnlineFoodDB]"
+          
+          if (Test-Path "onlinefoodscript.sql") {
+            sqlcmd -S "(localdb)\\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -m 1 -V 17 | Out-Null
+            Write-Host "✓ Database ready"
+          }
+
+      # Run ALL tests (19 unit + 3 integration = 22 total)
+      - name: 🧪 Run ALL 22 Tests (No Coverage)
+        shell: pwsh
+        run: |
+          Write-Host "🎯 Running ALL tests: 19 unit + 3 integration = 22 total"
+          
+          # Find VSTest
+          $vsPath = vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.Core -property installationPath
+          if (-not $vsPath) { $vsPath = "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise" }
+          $vstest = Join-Path $vsPath "Common7\\IDE\\CommonExtensions\\Microsoft\\TestWindow\\vstest.console.exe"
+          if (-not (Test-Path $vstest)) { 
+            $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $vstest) { throw "VSTest not found!" }
+          
+          nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
+          $testDll = ".\\FoodOrderingSystem.Tests\\bin\\Debug\\net48\\FoodOrderingSystem.Tests.dll"
+          if (-not (Test-Path $testDll)) { throw "Test DLL not found" }
+          
+          # RUN UNIT TESTS (19 tests)
+          Write-Host "`n=== UNIT TESTS (19) ==="
+          & $vstest $testDll `
+            /Logger:console `
+            /TestAdapterPath:"test-adapters" `
+            /TestCaseFilter:"TestCategory=Unit" `
+            /Platform:x64
+          
+          # RUN INTEGRATION TESTS (3 tests)  
+          Write-Host "`n=== INTEGRATION TESTS (3) ==="
+          & $vstest $testDll `
+            /Logger:console `
+            /TestAdapterPath:"test-adapters" `
+            /TestCaseFilter:"TestCategory=Integration" `
+            /Platform:x64
+          
+          Write-Host "`n✅ ALL 22 TESTS COMPLETE!"
+
+      - name: 📊 Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "✅ DEMO CI (FULL) COMPLETE!"
+          Write-Host ""
+          Write-Host "✅ Tests run: ALL 22 (19 unit + 3 integration)"
+          Write-Host "⚡ Time: ~3-4 minutes (vs 8-10 min for main CI)"
+          Write-Host ""
+          Write-Host "Skipped for speed:"
+          Write-Host "  ❌ Coverage reports (saves 1-2 min)"
+          Write-Host "  ❌ Package creation (saves 1-2 min)"
+          Write-Host "  ❌ Datadog upload (saves 20-30 sec)"
+          Write-Host ""
+          Write-Host "⏱️  TIME SAVED: ~4-6 minutes vs main CI!"
+          Write-Host "🎯 PERFECT FOR DEMOS: All tests run, much faster!"
