@@ -1,0 +1,111 @@
+name: demo-ci
+# 🚀 Fast CI workflow for demos and presentations
+# Runs in ~1-2 minutes instead of 8-10 minutes
+# Manual trigger only - not for production use
+
+on:
+  workflow_dispatch:  # Manual trigger from Actions tab
+    inputs:
+      test_filter:
+        description: 'Test filter (leave empty for all unit tests)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  quick-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      # Cache NuGet packages for faster restore
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.nuget/packages
+            **/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/packages.config') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Quick Build (Debug only, no optimizations)
+        shell: pwsh
+        run: |
+          Write-Host "🚀 DEMO MODE: Fast build (Debug only)"
+          
+          # Restore NuGet
+          nuget restore FoodOrderingSystem.sln
+          msbuild FoodOrderingSystem.sln -t:Restore
+          
+          # Build only test project (not entire solution)
+          msbuild ".\FoodOrderingSystem.Tests\FoodOrderingSystem.Tests.csproj" `
+            /p:Configuration=Debug `
+            /m `
+            /verbosity:minimal
+
+      - name: Run Unit Tests (Fast - No Coverage)
+        shell: pwsh
+        run: |
+          Write-Host "🧪 Running unit tests (no coverage to save time)"
+          
+          # Find VSTest
+          $vsPath = vswhere -latest -products * -requires Microsoft.VisualStudio.Component.TestTools.Core -property installationPath
+          if (-not $vsPath) { $vsPath = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise" }
+          $vstest = Join-Path $vsPath "Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe"
+          
+          if (-not (Test-Path $vstest)) { 
+            $vstest = Get-ChildItem -Path $vsPath -Filter "vstest.console.exe" -Recurse | Select-Object -First 1 -ExpandProperty FullName
+          }
+          if (-not $vstest) { throw "VSTest not found!" }
+          
+          Write-Host "Using VSTest: $vstest"
+          
+          # Install test adapter
+          nuget install MSTest.TestAdapter -Version 3.3.1 -OutputDirectory test-adapters
+          
+          # Test DLL path
+          $testDll = ".\FoodOrderingSystem.Tests\bin\Debug\net48\FoodOrderingSystem.Tests.dll"
+          if (-not (Test-Path $testDll)) { throw "Test DLL not found at $testDll" }
+          
+          # Build filter
+          $filter = "TestCategory=Unit"
+          if ("${{ github.event.inputs.test_filter }}" -ne "") {
+            $filter = "${{ github.event.inputs.test_filter }}"
+          }
+          
+          Write-Host "Test filter: $filter"
+          
+          # Run tests (NO COVERAGE - saves ~2 minutes!)
+          & $vstest $testDll `
+            /Logger:console `
+            /TestAdapterPath:"test-adapters" `
+            /TestCaseFilter:"$filter" `
+            /Platform:x64
+
+      - name: Demo Summary
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "✅ DEMO CI COMPLETE!"
+          Write-Host ""
+          Write-Host "📊 What was skipped to save time:"
+          Write-Host "  - Coverage report generation (saves ~1-2 min)"
+          Write-Host "  - Integration tests (saves ~2-3 min)"
+          Write-Host "  - Package creation (saves ~1-2 min)"
+          Write-Host "  - Datadog upload (saves ~20-30 sec)"
+          Write-Host ""
+          Write-Host "⏱️  Total time: ~1-2 minutes (vs 8-10 min for full CI)"
+          Write-Host ""
+          Write-Host "⚠️  NOTE: This is for DEMO purposes only!"
+          Write-Host "    Use main 'ci' workflow for production vạlidation."
