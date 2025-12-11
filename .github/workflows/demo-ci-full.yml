@@ -36,17 +36,36 @@ jobs:
           msbuild FoodOrderingSystem.sln -t:Restore
           msbuild FoodOrderingSystem.sln /p:Configuration=Debug /m /verbosity:minimal
 
-      # Setup SQL for integration tests (REQUIRED for all 22 tests)
-      - name: 🗄️ Quick SQL Setup
+      # Setup SQL for integration tests (ROBUST version from main CI)
+      - name: 🗄️ Setup SQL LocalDB
         shell: pwsh
         run: |
-          Write-Host "Setting up SQL LocalDB (minimal)..."
+          $ErrorActionPreference = 'Continue'
+          Write-Host "🚀 Setting up SQL LocalDB for integration tests..."
+          
           sqllocaldb start "MSSQLLocalDB"
+          
+          Write-Host "Creating fresh database..."
+          sqlcmd -S "(localdb)\\MSSQLLocalDB" -Q "IF DB_ID('OnlineFoodDB') IS NOT NULL DROP DATABASE [OnlineFoodDB]"
           sqlcmd -S "(localdb)\\MSSQLLocalDB" -Q "CREATE DATABASE [OnlineFoodDB]"
           
-          if (Test-Path "onlinefoodscript.sql") {
-            sqlcmd -S "(localdb)\\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -m 1 -V 17 | Out-Null
-            Write-Host "✓ Database ready"
+          if (-not (Test-Path "onlinefoodscript.sql")) {
+            throw "onlinefoodscript.sql not found!"
+          }
+          
+          Write-Host "Running SQL script (ignoring CREATE DATABASE errors)..."
+          sqlcmd -S "(localdb)\\MSSQLLocalDB" -d "OnlineFoodDB" -i "onlinefoodscript.sql" -m 1 -V 17 | Out-String | Write-Host
+          
+          # Verify database
+          Write-Host "`nVerifying database..."
+          $checkDb = sqlcmd -S "(localdb)\\MSSQLLocalDB" -Q "SELECT DB_ID('OnlineFoodDB')" -h -1
+          if ($checkDb -match '\\d+') {
+            $tables = sqlcmd -S "(localdb)\\MSSQLLocalDB" -d "OnlineFoodDB" -Q "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'" -h -1 | Where-Object { $_.Trim() }
+            $tableCount = ($tables | Measure-Object).Count
+            Write-Host "✓ Database ready with $tableCount tables"
+            if ($tableCount -eq 0) { throw "No tables found!" }
+          } else {
+            throw "Database not found!"
           }
 
       # Run ALL tests (19 unit + 3 integration = 22 total)
