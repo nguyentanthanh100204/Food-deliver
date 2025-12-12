@@ -1,67 +1,66 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using FoodOrderingSystem.Models;
-using Moq;
 using System.Linq;
 using System.Collections.Generic;
 
 namespace FoodOrderingSystem.Tests.Unit
 {
     [TestClass]
-    public class RestaurantManagementTests
+    public class MenuItemManagementTests
     {
         [TestMethod]
         [TestCategory(TestCategories.Unit)]
-        public void DeleteRestaurant_WithValidId_RemovesRestaurantSuccessfully()
+        public void DeleteMenuItem_WithValidId_RemovesItemSuccessfully()
         {
-            // Arrange - Setup mock restaurant list
-            var restaurants = new List<tblRestaurant>
+            // Arrange - Setup mock menu items list
+            var menuItems = new List<tblItem>
             {
-                new tblRestaurant { RestaurantId = 1, RestaurantName = "Nhà hàng A", Address = "123 Street" },
-                new tblRestaurant { RestaurantId = 2, RestaurantName = "Nhà hàng B", Address = "456 Street" },
-                new tblRestaurant { RestaurantId = 3, RestaurantName = "Nhà hàng C", Address = "789 Street" }
+                new tblItem { ItemId = 1, Title = "Phở Bò", Price = 50000 },
+                new tblItem { ItemId = 2, Title = "Bún Chả", Price = 45000 },
+                new tblItem { ItemId = 3, Title = "Cơm Tấm", Price = 40000 }
             };
 
-            int restaurantIdToDelete = 2;
-            int initialCount = restaurants.Count;
+            int itemIdToDelete = 2;
+            int initialCount = menuItems.Count;
 
-            // Act - Delete restaurant
-            var restaurantToDelete = restaurants.FirstOrDefault(r => r.RestaurantId == restaurantIdToDelete);
-            if (restaurantToDelete != null)
+            // Act - Delete menu item
+            var itemToDelete = menuItems.FirstOrDefault(i => i.ItemId == itemIdToDelete);
+            if (itemToDelete != null)
             {
-                restaurants.Remove(restaurantToDelete);
+                menuItems.Remove(itemToDelete);
             }
 
             // Assert
-            Assert.AreEqual(initialCount - 1, restaurants.Count, "Restaurant count should decrease by 1");
-            Assert.AreEqual(2, restaurants.Count, "Should have 2 restaurants remaining");
-            Assert.IsFalse(restaurants.Any(r => r.RestaurantId == restaurantIdToDelete), 
-                "Deleted restaurant should not exist in list");
+            Assert.AreEqual(initialCount - 1, menuItems.Count, "Menu item count should decrease by 1");
+            Assert.AreEqual(2, menuItems.Count, "Should have 2 menu items remaining");
+            Assert.IsFalse(menuItems.Any(i => i.ItemId == itemIdToDelete), 
+                "Deleted menu item should not exist in list");
         }
 
         [TestMethod]
         [TestCategory(TestCategories.Unit)]
-        public void DeleteRestaurant_WithInvalidId_DoesNotChangeList()
+        public void DeleteMenuItem_WithInvalidId_DoesNotChangeList()
         {
             // Arrange
-            var restaurants = new List<tblRestaurant>
+            var menuItems = new List<tblItem>
             {
-                new tblRestaurant { RestaurantId = 1, RestaurantName = "Nhà hàng A" },
-                new tblRestaurant { RestaurantId = 2, RestaurantName = "Nhà hàng B" }
+                new tblItem { ItemId = 1, Title = "Phở Bò", Price = 50000 },
+                new tblItem { ItemId = 2, Title = "Bún Chả", Price = 45000 }
             };
 
             int invalidId = 999;
-            int initialCount = restaurants.Count;
+            int initialCount = menuItems.Count;
 
-            // Act - Try to delete non-existent restaurant
-            var restaurantToDelete = restaurants.FirstOrDefault(r => r.RestaurantId == invalidId);
-            if (restaurantToDelete != null)
+            // Act - Try to delete non-existent item
+            var itemToDelete = menuItems.FirstOrDefault(i => i.ItemId == invalidId);
+            if (itemToDelete != null)
             {
-                restaurants.Remove(restaurantToDelete);
+                menuItems.Remove(itemToDelete);
             }
 
             // Assert - List should remain unchanged
-            Assert.AreEqual(initialCount, restaurants.Count, "Count should not change for invalid ID");
-            Assert.AreEqual(2, restaurants.Count, "Should still have 2 restaurants");
+            Assert.AreEqual(initialCount, menuItems.Count, "Count should not change for invalid ID");
+            Assert.AreEqual(2, menuItems.Count, "Should still have 2 menu items");
         }
     }
 }
